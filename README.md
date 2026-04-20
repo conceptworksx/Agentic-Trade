@@ -20,6 +20,16 @@ All analysis can be grounded in real‑world documents (policies, filings, repor
 
 ---
 
+##  Architecture Overview
+
+### Multi‑Agent Trading Pipeline
+![Trading Agent Graph](assets/TradingAgent_graph.png)
+
+### RAG‑Based Sector Analysis Pipeline
+![RAG Pipeline](assets/RAG_pipeline.png)
+
+---
+
 ##  Key Capabilities
 
 - **RAG on Indian government & regulatory sources** (Ministry of Commerce, SEBI, RBI)
