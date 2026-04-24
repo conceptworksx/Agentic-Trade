@@ -28,7 +28,7 @@ DATA_INPUT_INFORMATION:
     GSPC: S&P 500 Index (US)
     IXIC: NASDAQ Composite (US)
     NSEI: National Stock Exchange (India - Nifty 50)
-    BSESN: Bombay Stock Exchange (India - Sensex)
+    BSESN: Sensex Index (India - Sensex)
     VIX: CBOE Volatility Index (Fear Gauge)
   metrics:
     10d_pct_change: Short-term momentum
