@@ -2,17 +2,18 @@ from typing import TypedDict, Annotated, List, Literal
 from langgraph.graph import MessagesState, add_messages
 
 class AgentState(TypedDict):
-    
+
     # --- Contextual Metadata ---
-    name_of_company: Annotated[str, "The specific company ticker or name target for research."]
+    ticker_of_company: Annotated[str, "The specific company ticker or name target for research."]
     sector_of_company: Annotated[str, "The industry vertical the company operates within (e.g., Tech, Energy)."]
     date_of_planning: Annotated[str, "The ISO-formatted date when the trading strategy planning commenced."]
 
     # --- Analyst Insights ---
     market_analyst_report: Annotated[str, "Comprehensive analysis of broader market regimes (Bullish/Bearish/Neutral)."]
+    fundamentals_analyst_report: Annotated[str, "Evaluation of financial health, including P/E ratios, debt levels, and earnings."]
     sector_analyst_report: Annotated[str, "Specific analysis of sector-level trends, tailwinds, and headwinds."]
-    news_analysis: Annotated[str, "Sentiment score and summary of recent high-impact news and PR events."]
-    fundamentals_analysis: Annotated[str, "Evaluation of financial health, including P/E ratios, debt levels, and earnings."]
+    technical_analyst_report: Annotated[str, "Technical strength of the stock based on the indicator parameters"]
+    news_analyst_report: Annotated[str, "Summary of recent high-impact news and PR events."]
 
     # --- Strategic Perspectives ---
     bull_case: Annotated[str, "The optimistic thesis highlighting potential upside triggers."]
