@@ -322,8 +322,8 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
     close = df["Close"]
     close = close.dropna()
     price = float(close.iloc[-1])
-    h52   = float(close.rolling(250).max().iloc[-1])
-    l52   = float(close.rolling(250).min().iloc[-1])
+    h52   = float(close.tail(252).max()) #rolling is causing to take last 252 if not then nan so cahnge to the tail
+    l52   = float(close.tail(252).min())
 
     return {
         "current":           round(price, 2),

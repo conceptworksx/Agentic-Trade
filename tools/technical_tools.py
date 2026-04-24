@@ -95,13 +95,13 @@ def get_technical_snapshot(
     }
 
 
-if __name__ == "__main__":
-    print("Fetching technical snapshot …\n")
-    snapshot = get_technical_snapshot("RELIANCE.NS")
-    output = json.dumps(snapshot, indent=2)
-    print(output)
+# if __name__ == "__main__":
+#     print("Fetching technical snapshot …\n")
+#     snapshot = get_technical_snapshot("RELIANCE.NS")
+#     output = json.dumps(snapshot, indent=2)
+#     print(output)
 
-    with open("technical_snapshot.json", "w") as f:
-        f.write(output)
+#     with open("technical_snapshot.json", "w") as f:
+#         f.write(output)
 
-    print("\nSaved → technical_snapshot.json")
+#     print("\nSaved → technical_snapshot.json")
