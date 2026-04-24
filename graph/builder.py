@@ -9,6 +9,7 @@ def build_graph():
     work_flow=StateGraph(AgentState)
 
     work_flow.add_node("market_analyst", nodes.run_market_analyst)
+    work_flow.add_node("news_analyst", nodes.run_news_analyst)
 
     work_flow.set_entry_point("market_analyst")
 
