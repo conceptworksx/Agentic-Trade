@@ -9,11 +9,18 @@ def build_graph():
     work_flow=StateGraph(AgentState)
 
     work_flow.add_node("market_analyst", nodes.run_market_analyst)
+    work_flow.add_node("technical_analyst", nodes.run_technical_analyst)
     work_flow.add_node("news_analyst", nodes.run_news_analyst)
 
-    work_flow.set_entry_point("market_analyst")
+    work_flow.set_entry_point(START)
+
+    work_flow.add_edge(START,"market_analyst")
+    work_flow.add_edge(START,"technical_analyst")
+    work_flow.add_edge(START,"news_analyst")
 
     work_flow.add_edge("market_analyst", END)
+    work_flow.add_edge("technical_analyst",END)
+    work_flow.add_edge("news_analyst",END)
 
     return work_flow.compile()
 
