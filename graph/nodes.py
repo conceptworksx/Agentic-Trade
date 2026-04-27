@@ -22,14 +22,16 @@ def run_news_analyst(state: AgentState) -> dict:
 
 def run_aggregator(state: AgentState) -> dict:
   
-    market_data = state.get("market_data")
-    technical_data = state.get("technical_data")
-    news_data = state.get("news_data")
+    market_data = state.get("market_analyst_report")
+    technical_data = state.get("technical_analyst_report")
+    news_data = state.get("news_analyst_report")
     
     final_report = f"""
     ### FINAL SUMMARY
     - Market Status: {market_data}
+    ######################################
     - Technical Analysis: {technical_data}
+    ######################################
     - News Sentiment: {news_data}
     
     """

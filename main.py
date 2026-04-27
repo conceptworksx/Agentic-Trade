@@ -6,6 +6,7 @@ result = app.invoke({
         "messages":[]
 })
 
-print(result["market_analyst_report"])
-print(result["technical_analyst_report"])
-print(result["news_analyst_report"])
+# print(result["market_analyst_report"])
+# print(result["technical_analyst_report"])
+# print(result["news_analyst_report"])
+# print(result["final_report"])
