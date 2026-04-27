@@ -1,7 +1,7 @@
 import yfinance as yf
 
 
-def extract_news_fields(news_json):
+def _extract_news_fields(news_json):
     """
     Extract and normalize relevant fields from raw Yahoo Finance news data.
 
@@ -33,7 +33,7 @@ def extract_news_fields(news_json):
 
 
 
-def get_company_news(ticker_symbol: str, limit: int = 5):
+def get_company_news(ticker: str, limit: int = 5):
     """
     Fetch latest news for a given stock ticker from Yahoo Finance.
 
@@ -51,7 +51,7 @@ def get_company_news(ticker_symbol: str, limit: int = 5):
         Assumes news is returned in descending chronological order.
     """
     try:
-        ticker = yf.Ticker(ticker_symbol)
+        ticker = yf.Ticker(ticker)
         news = ticker.get_news()
 
         if not news:
@@ -64,7 +64,7 @@ def get_company_news(ticker_symbol: str, limit: int = 5):
 
         return {
             "status": "success",
-            "articles": extract_news_fields(news)
+            "articles": _extract_news_fields(news)
         }
 
     except Exception as e:
