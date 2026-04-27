@@ -38,7 +38,7 @@ def get_company_news(ticker: str, limit: int = 5):
     Fetch latest news for a given stock ticker from Yahoo Finance.
 
     Args:
-        ticker_symbol (str): Stock ticker (e.g., "RELIANCE.NS")
+        ticker (str): Stock ticker (e.g., "RELIANCE.NS")
         limit (int): Max number of articles to return
 
     Returns:

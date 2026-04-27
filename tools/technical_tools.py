@@ -2,7 +2,7 @@ import json
 import warnings
 from typing import Any
 
-from utils.technical_tool_helper import (
+from tools.utils.technical_tool_helper import (
     fetch_df,
     compute_moving_averages,
     compute_rsi,
@@ -49,8 +49,8 @@ def get_technical_snapshot(
         3. Aggregate into a single structured dictionary
 
     Args:
-        symbol   (str): Yahoo Finance ticker (e.g. 'RELIANCE.NS', 'TCS.NS', 'AAPL').
-        period   (str): Lookback window — '6mo', '1y', '2y' (default '1y').
+        symbol (str): Yahoo Finance ticker (e.g. 'RELIANCE.NS', 'TCS.NS', 'AAPL').
+        period (str): Lookback window — '6mo', '1y', '2y' (default '1y').
         interval (str): Bar size — '1d' daily, '1h' hourly, '1wk' weekly (default '1d').
 
     Returns:
