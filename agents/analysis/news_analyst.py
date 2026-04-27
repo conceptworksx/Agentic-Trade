@@ -6,6 +6,7 @@ class NewsAnalyst(BaseAgent):
     prompt_path = "prompts/news_analyst_prompt.yaml"
     tools       = [get_company_news]
 
-    def run(self) -> str:
-        messages = [HumanMessage(content=f"Get the news")]
+    def run(self , ticker : str) -> str:
+
+        messages = [HumanMessage(content=f"Analysize the news for : {ticker}")]
         return self._invoke(messages)
