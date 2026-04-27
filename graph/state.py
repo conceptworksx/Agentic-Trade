@@ -31,3 +31,6 @@ class AgentState(TypedDict):
     # --- Conversation History ---
     # We use add_messages to ensure new messages are appended to the history rather than overwriting it
     messages: Annotated[list, add_messages]
+
+    # ----Temporary State----------
+    final_report: Annotated[str , "Contains all the report and used by the aggregator"]
