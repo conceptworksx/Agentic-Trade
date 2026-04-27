@@ -14,8 +14,8 @@ def run_market_analyst(state: AgentState) -> dict:
 
 def run_technical_analyst(state : AgentState) -> dict:
     result = technical_analyst.run(ticker=state["ticker_of_company"])
-    return {"technical_analysis_report" : result} 
+    return {"technical_analyst_report" : result} 
 
 def run_news_analyst(state: AgentState) -> dict:
-    result = news_analyst.run()
+    result = news_analyst.run(ticker=state["ticker_of_company"])
     return {"news_analyst_report": result}
