@@ -10,7 +10,7 @@ class AgentState(TypedDict):
 
     # --- Analyst Insights ---
     market_analyst_report: Annotated[str, "Comprehensive analysis of broader market regimes (Bullish/Bearish/Neutral)."]
-    fundamentals_analyst_report: Annotated[str, "Evaluation of financial health, including P/E ratios, debt levels, and earnings."]
+    fundamental_analyst_report: Annotated[str, "Evaluation of financial health, including P/E ratios, debt levels, and earnings."]
     sector_analyst_report: Annotated[str, "Specific analysis of sector-level trends, tailwinds, and headwinds."]
     technical_analyst_report: Annotated[str, "Technical strength of the stock based on the indicator parameters"]
     news_analyst_report: Annotated[str, "Summary of recent high-impact news and PR events."]
