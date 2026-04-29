@@ -53,13 +53,18 @@ class BaseAgent:
                      if self.tools else self.prompt | self.llm
 
 
-    def _invoke(self, messages: list) -> str:
+    def _invoke(self, messages: list, **kwargs) -> str:
         """
         Core loop: call LLM → execute tools if needed → repeat → return final string.
         Every child calls this inside their own run() method.
         """
         while True:
-            result: AIMessage = self.chain.invoke({"messages": messages})
+            
+            # now the prompt is no more static takes the input from the run() where self._invoke() is called
+            invoke_payload={"messages": messages}
+            invoke_payload.update(kwargs)
+
+            result: AIMessage = self.chain.invoke(invoke_payload)
             messages.append(result)
 
             if not result.tool_calls:
