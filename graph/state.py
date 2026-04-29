@@ -1,6 +1,14 @@
 from typing import TypedDict, Annotated, List, Literal
 from langgraph.graph import MessagesState, add_messages
 
+class InvestmentDebateState(TypedDict):
+
+    bull_thesis: Annotated[str, "Optimistic investment thesis highlighting potential upside drivers and catalysts."]
+    bear_thesis: Annotated[str, "Pessimistic investment thesis outlining key risks, weaknesses, and downside triggers."]
+    debate_history: Annotated[str, "Chronological record of the investment debate discussion."]
+    final_decision: Annotated[str, "Final decision made by the research manager after evaluating both perspectives."]
+    debate_rounds: Annotated[int, "Number of debate iterations conducted."]
+
 class AgentState(TypedDict):
 
     # --- Contextual Metadata ---
@@ -16,8 +24,11 @@ class AgentState(TypedDict):
     news_analyst_report: Annotated[str, "Summary of recent high-impact news and PR events."]
 
     # --- Strategic Perspectives ---
-    bull_case: Annotated[str, "The optimistic thesis highlighting potential upside triggers."]
-    bear_case: Annotated[str, "The pessimistic thesis highlighting risks and potential downside triggers."]
+    investment_debate: Annotated[
+        InvestmentDebateState, 
+        "Structured state capturing the ongoing investment debate, including bull and bear arguments ," \
+        "discussion history, final decision, and debate iteration count."]
+    investment_strategy: Annotated[str, "Final synthesized investment strategy derived from the debate."]
 
     # --- Orchestration & Logic ---
     debate_round: Annotated[int, "A counter tracking the number of iterations between Bull and Bear nodes."]
