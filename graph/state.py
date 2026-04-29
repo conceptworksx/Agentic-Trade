@@ -7,6 +7,7 @@ class InvestmentDebateState(TypedDict):
     bear_thesis: Annotated[str, "Pessimistic investment thesis outlining key risks, weaknesses, and downside triggers."]
     debate_history: Annotated[str, "Chronological record of the investment debate discussion."]
     final_decision: Annotated[str, "Final decision made by the research manager after evaluating both perspectives."]
+    current_response: Annotated[str, "Current outcome of the researcher"]
     debate_rounds: Annotated[int, "Number of debate iterations conducted."]
 
 class AgentState(TypedDict):
@@ -31,7 +32,6 @@ class AgentState(TypedDict):
     investment_strategy: Annotated[str, "Final synthesized investment strategy derived from the debate."]
 
     # --- Orchestration & Logic ---
-    debate_round: Annotated[int, "A counter tracking the number of iterations between Bull and Bear nodes."]
     research_verdict: Annotated[str, "The synthesized conclusion produced by the Research Manager."]
     trade_signal: Annotated[Literal["BUY", "SELL", "HOLD"], "The final binary or ternary trading decision."]
     risk_profile: Annotated[Literal["aggressive", "conservative"], "The risk tolerance level applied to the trade execution."]
