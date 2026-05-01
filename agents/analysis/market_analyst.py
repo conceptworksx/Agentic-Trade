@@ -1,5 +1,7 @@
 from langchain_core.messages import HumanMessage
 from agents.base_agent import BaseAgent
+from core.logging import get_logger
+logger = get_logger(__name__)
 from tools.market_tools import get_market_snapshot
 
 class MarketAnalyst(BaseAgent):

@@ -93,3 +93,9 @@ OUTPUT_FORMAT:
     - "- If SELL: 'Action: Exit existing positions. No buy setup found.'"
     - "- Time Horizon"
     - "- Key Risk"
+EXECUTION_RULES:
+  - You MUST call the tool `get_technical_snapshot` first.
+  - Do NOT generate the report without calling the tool.
+  - Do NOT call any other tool.
+  - After receiving tool output, generate the final report in plain text.
+  - Do NOT use function/tool call for final answer.

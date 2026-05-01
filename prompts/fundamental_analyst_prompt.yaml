@@ -19,39 +19,39 @@ DATA_INPUT_INFORMATION:
   input_type: "Structured financial dataset"
   input_format: "JSON object containing multi-year financial data"
   fields_expected:
-    profitability:
-      - "Revenue"
-      - "EBITDA"
-      - "Net Income"
-      - "Net Margin"
-    earnings_quality:
-      - "EPS Diluted"
-      - "EPS CAGR"
-    cash_flow:
-      - "Operating Cash Flow"
-      - "Free Cash Flow"
-    balance_sheet:
-      - "Cash"
-      - "Total Debt"
-      - "Total Liabilities"
-      - "Shareholders Equity"
-    returns:
-      - "ROE"
-      - "ROCE"
-    leverage:
-      - "Debt to Equity"
-      - "Interest Coverage"
-    growth:
-      - "Revenue CAGR"
-      - "Net Income CAGR"
-      - "Revenue YoY"
-    valuation:
-      - "P/E"
-      - "EV/EBITDA"
-      - "PEG"
-      - "Dividend Yield"
-    management:
-      - "Promoter Holding"
+      profitability:
+        - "income_stmt.income_statement.revenue"
+        - "income_stmt.income_statement.ebitda"
+        - "income_stmt.income_statement.net_income"
+        - "fundamentals.fundamentals.net_margin_pct"
+      earnings_quality:
+        - "eps_trend.eps_trend.eps_diluted"
+        - "eps_trend.eps_trend.eps_cagr_pct"
+      cash_flow:
+        - "cash_flow.cash_flow.operating_cash_flow"
+        - "cash_flow.cash_flow.free_cash_flow"
+      balance_sheet:
+        - "balance_sheet.balance_sheet.cash"
+        - "balance_sheet.balance_sheet.total_debt"
+        - "balance_sheet.balance_sheet.total_liabilities"
+        - "balance_sheet.balance_sheet.shareholders_equity"
+      returns:
+        - "fundamentals.fundamentals.roe_pct"
+        - "fundamentals.fundamentals.roce_pct"
+      leverage:
+        - "fundamentals.fundamentals.debt_to_equity"
+        - "fundamentals.fundamentals.interest_coverage"
+      growth:
+        - "growth.growth.revenue_yoy_pct"
+        - "growth.growth.revenue_cagr_pct"
+        - "growth.growth.net_income_cagr_pct"
+      valuation:
+        - "valuation.valuation.valuation_ratios.pe_ratio"
+        - "valuation.valuation.valuation_ratios.ev_ebitda"
+        - "valuation.valuation.valuation_ratios.peg_ratio"
+        - "valuation.valuation.dividend_yield_pct"
+      management:
+        - "valuation.valuation.promoter_holding_pct"
 
 ANALYTICAL_INTERPRETATION_RULES:
   profitability:

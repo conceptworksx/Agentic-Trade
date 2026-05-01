@@ -2,6 +2,8 @@ from langgraph.graph import END,START,StateGraph
 from graph.state import AgentState
 import graph.nodes as nodes
 import graph.conditional_edges as conditional_edges
+from core.logging import get_logger
+logger = get_logger(__name__)
 
 
 def build_graph():
@@ -28,5 +30,34 @@ def build_graph():
 
     return work_flow.compile()
 
-app=build_graph()
+def build_graph_seq():
+
+    work_flow = StateGraph(AgentState)
+
+    # --- Adding Nodes ---
+    work_flow.add_node("market_analyst", nodes.run_market_analyst)
+    work_flow.add_node("technical_analyst", nodes.run_technical_analyst)
+    work_flow.add_node("news_analyst", nodes.run_news_analyst)
+    work_flow.add_node("fundamental_analyst", nodes.run_fundamental_analyst)
+    work_flow.add_node("bull_researcher", nodes.run_bull_researcher)
+
+    # --- Sequential Edges ---
+    # Flow: Start -> Market -> Fundamental -> Technical -> News -> Bull -> End
+    work_flow.add_edge(START, "market_analyst")
+    work_flow.add_edge("market_analyst", "fundamental_analyst")
+    work_flow.add_edge("fundamental_analyst", "technical_analyst")
+    work_flow.add_edge("technical_analyst", "news_analyst")
+    work_flow.add_edge("news_analyst", "bull_researcher")
+    work_flow.add_edge("bull_researcher", END)
+
+    return work_flow.compile()
+
+try:
+    app = build_graph_seq()
+
+except Exception as e:
+
+    raise RuntimeError(f"Graph validation failed: {e}")
+
+
 

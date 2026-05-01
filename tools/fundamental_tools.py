@@ -1,256 +1,178 @@
 import json
 import warnings
 from typing import Any
-
+import pandas as pd
 from tools.utils.fundamental_tool_helper import (
-    fetch_income_stmt,
-    fetch_balance_sheet,
-    fetch_cash_flow,
-    fetch_fundamentals,
-    fetch_eps_trend,
-    fetch_valuation,
-    fetch_growth,
+    _fetch_income_stmt,
+    _fetch_balance_sheet,
+    _fetch_cash_flow,
+    _fetch_fundamentals,
+    _fetch_eps_trend,
+    _fetch_valuation,
+    _fetch_growth,
+    _ticker_data,
 )
+from core.error import (
+    handle_tool_errors,
+    DataFetchError,
+    DataParseError,
+    ToolExecutionError,
+    AgentError,
+)
+from core.logging import get_logger
+logger = get_logger(__name__)
 
 warnings.filterwarnings("ignore")
 
-"""
-Functions:
-    get_income_stmt(symbol)   → Profitability / P&L metrics
-    get_balance_sheet(symbol) → Asset, liability, equity metrics
-    get_cash_flow(symbol)     → OCF, CapEx, FCF, financing flows
-    get_fundamentals(symbol)  → Derived profitability, liquidity, leverage, efficiency ratios
-    get_eps_trend(symbol)     → EPS history, growth, analyst estimates
-    get_valuation(symbol)     → Valuation ratios, market metrics, dividends, holdings
-    get_growth(symbol)        → YoY and CAGR growth for revenue, profit, EPS
 
-"""
-
-def get_income_stmt(ticker: str) -> dict[str, Any]:
+@handle_tool_errors("get_fundamental_snapshot")
+def get_fundamental_snapshot(ticker: str) -> dict[str, Any]:
     """
-    Fetch annual income statement for a given equity ticker.
+    Generate a complete fundamental analysis dataset for a single equity ticker.
+
+    This is the PRIMARY and ONLY tool required for fundamental analysis.
+    It aggregates all financial data into one structured response.
+
+    Process:
+        1. Fetch income statement (profitability metrics)
+        2. Fetch balance sheet (financial position)
+        3. Fetch cash flow statement (cash generation)
+        4. Compute key financial ratios (ROE, ROCE, leverage)
+        5. Fetch EPS trends and growth rates
+        6. Fetch valuation metrics and ownership data
+        7. Compute revenue and profit growth metrics
+        8. Aggregate everything into a single structured dictionary
 
     Args:
-        ticker (str): Yahoo Finance ticker (e.g. 'RELIANCE.NS', 'TCS.NS', 'AAPL').
+        ticker (str): Yahoo Finance ticker
+                      (e.g. 'RELIANCE.NS', 'TCS.NS', 'AAPL').
 
     Returns:
         dict[str, Any]:
             {
                 "ticker": str,
-                "income_statement": {
-                    "revenue":           {"2025-03-31": float, ...},
-                    "gross_profit":      {"2025-03-31": float, ...},
-                    "operating_expense": {"2025-03-31": float, ...},
-                    "operating_income":  {"2025-03-31": float, ...},
-                    "ebitda":            {"2025-03-31": float, ...},
-                    "net_income":        {"2025-03-31": float, ...},
-                    "eps_basic":         {"2025-03-31": float, ...},
-                    "eps_diluted":       {"2025-03-31": float, ...},
+
+                "income_stmt": {
+                    "income_statement": {
+                        "revenue": {...},
+                        "ebitda": {...},
+                        "net_income": {...},
+                        ...
+                    }
+                },
+
+                "balance_sheet": {
+                    "balance_sheet": {
+                        "cash": {...},
+                        "total_debt": {...},
+                        "total_liabilities": {...},
+                        "shareholders_equity": {...}
+                    }
+                },
+
+                "cash_flow": {
+                    "cash_flow": {
+                        "operating_cash_flow": {...},
+                        "free_cash_flow": {...}
+                    }
+                },
+
+                "fundamentals": {
+                    "fundamentals": {
+                        "net_margin_pct": {...},
+                        "roe_pct": {...},
+                        "roce_pct": {...},
+                        "debt_to_equity": {...},
+                        "interest_coverage": {...}
+                    }
+                },
+
+                "eps_trend": {
+                    "eps_trend": {
+                        "eps_diluted": {...},
+                        "eps_cagr_pct": float
+                    }
+                },
+
+                "valuation": {
+                    "valuation": {
+                        "valuation_ratios": {
+                            "pe_ratio": float,
+                            "ev_ebitda": float,
+                            "peg_ratio": float
+                        },
+                        "market_cap": float,
+                        "dividend_yield_pct": float,
+                        "promoter_holding_pct": float
+                    }
+                },
+
+                "growth": {
+                    "growth": {
+                        "revenue_yoy_pct": {...},
+                        "revenue_cagr_pct": float,
+                        "net_income_cagr_pct": float
+                    }
                 }
             }
 
     Agent Use:
-        Core profitability assessment — revenue growth, margin trends,
-        EPS trajectory, earnings quality.
+        - MUST be called before performing any fundamental analysis
+        - Provides ALL required financial data in a single response
+        - Do NOT call individual financial tools separately
+        - Use this output as the ONLY data source for analysis
+        - All values are JSON-serializable (float, int, bool, str, None)
+
+    Execution Rules for Agent:
+        1. First call get_fundamental_snapshot with the given ticker
+        2. Wait for the tool response
+        3. Perform full analysis using the returned data
+        4. Do NOT call any other tool
+        5. Return final output as plain text (no tool calls)
 
     Raises:
-        ValueError: If no data is returned for the symbol.
+        DataFetchError: If yfinance returns empty/None data for the ticker.
+        DataParseError: If fetched data is malformed or missing expected fields.
+        ToolExecutionError: Raised by @handle_tool_errors for any unhandled exception.
     """
-    data = fetch_income_stmt(ticker)
-    if "error" in data:
-        raise ValueError(data["error"])
-    return {"ticker": ticker, "income_statement": data}
+    # ticker_data() raises DataFetchError on instantiation failure
+    t = _ticker_data(ticker)
 
+    # Wrap yfinance property access in a try-except. 
+    # Accessing these properties triggers the actual network requests.
+    try:
+        logger.info(f"Fetching financial datasets for {ticker} from yfinance...")
+        financials     = t.financials
+        balance_sheet  = t.balance_sheet
+        cash_flow      = t.cash_flow
+        info           = t.info if isinstance(t.info, dict) else {}
+        major_holders  = t.major_holders
+    except Exception as exc:
+        logger.exception(f"Network error while fetching data for {ticker}")
+        raise DataFetchError(source="yfinance", symbol=ticker, original=exc)
 
-def get_balance_sheet(ticker: str) -> dict[str, Any]:
-    """
-    Fetch annual balance sheet for a given equity ticker.
+    return {
+        "ticker":        ticker,
+        "income_stmt":   _fetch_income_stmt(financials),
+        "balance_sheet": _fetch_balance_sheet(balance_sheet, info),
+        "cash_flow":     _fetch_cash_flow(cash_flow),
+        "fundamentals":  _fetch_fundamentals(financials, balance_sheet),
+        "eps_trend":     _fetch_eps_trend(financials),
+        "valuation":     _fetch_valuation(info, major_holders),
+        "growth":        _fetch_growth(financials),
+    }
 
-    Args:
-        ticker (str): Yahoo Finance ticker.
+if __name__ == "__main__":
+    from core.logging import bootstrap_standalone
+    bootstrap_standalone(__file__)
+    
+    TICKER = "RELIANCE.NS"
+    logger.info(f"Running fundamental snapshot for {TICKER}\n")
 
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "balance_sheet": {
-                    "cash":                 {"2025-03-31": float, ...},
-                    "total_liabilities":    {"2025-03-31": float, ...},
-                    "total_debt":           {"2025-03-31": float, ...},
-                    "shareholders_equity":  {"2025-03-31": float, ...},
-                }
-            }
+    results = get_fundamental_snapshot(ticker=TICKER)
+    output = json.dumps(results, indent=2)
+    print(output)
 
-    Agent Use:
-        Debt load, liquidity buffers, equity growth, working capital health.
-    """
-    data = fetch_balance_sheet(ticker)
-    if "error" in data:
-        raise ValueError(data["error"])
-    return {"ticker": ticker, "balance_sheet": data}
-
-
-def get_cash_flow(ticker: str) -> dict[str, Any]:
-    """
-    Fetch annual cash flow statement for a given equity ticker.
-
-    Args:
-        ticker (str): Yahoo Finance ticker.
-
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "cash_flow": {
-                    "operating_cash_flow":       {"2025-03-31": float, ...},
-                    "free_cash_flow":             {"2025-03-31": float, ...},
-                }
-            }
-
-    Agent Use:
-        FCF generation, capex intensity vs competitors, dividend sustainability,
-        earnings vs cash flow reconciliation (earnings quality check).
-    """
-    data = fetch_cash_flow(ticker)
-    if "error" in data:
-        raise ValueError(data["error"])
-    return {"ticker": ticker, "cash_flow": data}
-
-
-def get_fundamentals(ticker: str) -> dict[str, Any]:
-    """
-    Compute derived fundamental ratios from income statement + balance sheet.
-
-    Args:
-        ticker (str): Yahoo Finance ticker.
-
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "fundamentals": {
-                    # Profitability
-                    "roe_pct":              {"2025-03-31": float, ...},
-                    "roce_pct":             {"2025-03-31": float, ...},
-                    # Leverage
-                    "debt_to_equity":       {"2025-03-31": float, ...},
-                    "interest_coverage":    {"2025-03-31": float, ...},
-                }
-            }
-
-    Agent Use:
-        Margin expansion/compression trends, leverage risk, capital efficiency,
-        ROE vs ROCE spread (signals debt-funded growth vs organic growth).
-    """
-    data = fetch_fundamentals(ticker)
-    if "error" in data:
-        raise ValueError(data["error"])
-    return {"ticker": ticker, "fundamentals": data}
-
-
-def get_eps_trend(ticker: str) -> dict[str, Any]:
-    """
-    Fetch EPS history, growth rates, and analyst forward estimates.
-
-    Args:
-        ticker (str): Yahoo Finance ticker.
-
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "eps_trend": {
-                    "eps_diluted":            {"2025-03-31": float, ...},
-                    "eps_cagr_pct":           float,
-                }
-            }
-
-    Agent Use:
-        EPS trajectory, analyst beat/miss history, forward earnings growth,
-        PEG ratio context, estimate revision momentum.
-    """
-    data = fetch_eps_trend(ticker)
-    return {"ticker": ticker, "eps_trend": data}
-
-
-def get_valuation(ticker: str) -> dict[str, Any]:
-    """
-    Fetch current valuation ratios, market metrics, dividend data, and holdings.
-
-    Args:
-        ticker (str): Yahoo Finance ticker.
-
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "valuation": {
-                    "market_cap":         float,
-                    "valuation_ratios": {
-                        "pe_ratio":       float | None,
-                        "ev_ebitda":      float | None,
-                        "peg_ratio":      float | None,
-                    },
-                    "dividend_yield_pct":  float | None,
-                    "promoter_holding_pct":      float | None,
-                }
-            }
-
-    Agent Use:
-        Cheap vs expensive vs fair value judgment, dividend income viability,
-        promoter confidence signal, institutional accumulation/distribution.
-    """
-    data = fetch_valuation(ticker)
-    return {"ticker": ticker, "valuation": data}
-
-
-def get_growth(ticker: str) -> dict[str, Any]:
-    """
-    Compute YoY growth rates and multi-year CAGR for revenue, profit, and EPS.
-
-    Args:
-        ticker (str): Yahoo Finance ticker.
-
-    Returns:
-        dict[str, Any]:
-            {
-                "ticker": str,
-                "growth": {
-                    "revenue_yoy_pct":     {"2024-03-31": float, ...},
-                    "revenue_cagr_pct":    float,
-                    "net_income_cagr_pct": float,
-                }
-            }
-
-    Agent Use:
-        Identify compounders vs one-time growers. CAGR cross-check with
-        valuation multiples to validate PEG ratio. Profit growth vs revenue
-        growth spread reveals operating leverage.
-    """
-    data = fetch_growth(ticker)
-    if "error" in data:
-        raise ValueError(data["error"])
-    return {"ticker": ticker, "growth": data}
-
-
-
-# if __name__ == "__main__":
-#     SYMBOL = "RELIANCE.NS"
-#     print(f"Running fundamental snapshot for {SYMBOL}\n")
-
-#     results = {
-#         "income_stmt":  get_income_stmt(SYMBOL),
-#         "balance_sheet": get_balance_sheet(SYMBOL),
-#         "cash_flow":    get_cash_flow(SYMBOL),
-#         "fundamentals": get_fundamentals(SYMBOL),
-#         "eps_trend":    get_eps_trend(SYMBOL),
-#         "valuation":    get_valuation(SYMBOL),
-#         "growth":       get_growth(SYMBOL),
-#     }
-
-#     output = json.dumps(results, indent=2)
-#     print(output)
-
-#     with open("fundamental_snapshot2.json", "w") as f:
-#         f.write(output)
-#     print("\nSaved → fundamental_snapshot2.json")
+    with open("fundamental_snapshot.json", "w") as f:
+        f.write(output)
+    logger.info("\nSaved → fundamental_snapshot.json")

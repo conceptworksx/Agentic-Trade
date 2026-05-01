@@ -1,6 +1,8 @@
 from typing import List, Dict, Optional
 import yfinance as yf
 from email.utils import parsedate_to_datetime
+from core.logging import get_logger
+logger = get_logger(__name__)
 
 
 
@@ -31,6 +33,7 @@ def _extract_news_fields(news_json):
             })
 
         except Exception:
+            logger.exception("Extracting news is causing the error.")
             continue
 
     return extracted
@@ -41,6 +44,7 @@ def _to_iso(date_str: str) -> str:
     try:
         return parsedate_to_datetime(date_str).strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
+        logger.exception("Tavily _to_iso format is confilcting.")
         return None
     
 

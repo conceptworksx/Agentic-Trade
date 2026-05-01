@@ -6,7 +6,9 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 from config.settings import get_llm
-
+from core.error import handle_llm_errors
+from core.logging import get_logger
+logger = get_logger(__name__)
 
 def load_structured_prompt(file_path: str) -> str:
     path = Path(file_path)
@@ -53,6 +55,7 @@ class BaseAgent:
                      if self.tools else self.prompt | self.llm
 
 
+    @handle_llm_errors(retries=1)
     def _invoke(self, messages: list, **kwargs) -> str:
         """
         Core loop: call LLM → execute tools if needed → repeat → return final string.

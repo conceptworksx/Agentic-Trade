@@ -1,4 +1,6 @@
 from langchain_core.messages import HumanMessage
+from core.logging import get_logger
+logger = get_logger(__name__)
 from agents.base_agent import BaseAgent
 
 class BullReseacher(BaseAgent):

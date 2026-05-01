@@ -1,20 +1,15 @@
 from langchain_core.messages import HumanMessage
 from agents.base_agent import BaseAgent
+from core.logging import get_logger
+logger = get_logger(__name__)
 from tools.fundamental_tools import (
-    get_balance_sheet,
-    get_cash_flow,
-    get_income_stmt,
-    get_valuation,
-    get_eps_trend,
-    get_fundamentals,
-    get_growth,
+    get_fundamental_snapshot
 )
 
 class FundamenetalAnalyst(BaseAgent):
 
     prompt_path="prompts/fundamental_analyst_prompt.yaml"
-    tools=[get_balance_sheet,get_cash_flow,get_income_stmt,get_valuation,
-           get_eps_trend,get_fundamentals,get_growth]
+    tools=[get_fundamental_snapshot]
     
     def run(self, ticker : str):
 

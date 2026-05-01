@@ -1,38 +1,31 @@
 import json
 import warnings
 from typing import Any
-
 from tools.utils.technical_tool_helper import (
-    fetch_df,
-    compute_moving_averages,
-    compute_rsi,
-    compute_macd,
-    compute_bollinger,
-    compute_atr,
-    compute_vwma,
-    compute_mfi,
-    compute_volume,
-    compute_price_levels,
+    _fetch_df,
+    _compute_moving_averages,
+    _compute_rsi,
+    _compute_macd,
+    _compute_bollinger,
+    _compute_atr,
+    _compute_vwma,
+    _compute_mfi,
+    _compute_volume,
+    _compute_price_levels,
 )
+from core.error import (
+    handle_tool_errors,
+    DataFetchError,
+    DataParseError,
+    MaxRetriesExceeded,
+    AgentError,
+)
+from core.logging import get_logger
+logger = get_logger(__name__)
 
 warnings.filterwarnings("ignore")
 
-"""
-Technical Analysis Tool (Agentic AI Utility)
-
-Entry point for the technical analysis tool.
-Import get_technical_snapshot() and register it in your agent's tool dispatcher.
-
-Intended Use:
-    - Equity technical analysis agents
-    - Buy/Hold/Sell signal generation pipelines
-    - Stock screening and research workflows
-
-Output:
-    JSON-serialisable dict with all technical signals for a given ticker.
-"""
-
-
+@handle_tool_errors("get_technical_snapshot")
 def get_technical_snapshot(
     symbol: str,
     period: str = "1y",
@@ -44,8 +37,8 @@ def get_technical_snapshot(
     This is the primary entry point for agentic systems.
 
     Process:
-        1. Fetch OHLCV data via yfinance
-        2. Compute all technical indicators
+        1. Fetch OHLCV data via yfinance (retried, raises on failure)
+        2. Compute all technical indicators (each raises DataParseError on failure)
         3. Aggregate into a single structured dictionary
 
     Args:
@@ -74,34 +67,40 @@ def get_technical_snapshot(
         - Combine with get_market_snapshot() for macro-aware analysis
 
     Raises:
-        ValueError: If symbol returns empty data from yfinance.
+        DataFetchError: If yfinance returns empty/None data for the symbol.
+        DataParseError: If any indicator computation fails on malformed data.
+        MaxRetriesExceeded: If all fetch retries are exhausted.
+        ToolExecutionError: Raised by @handle_tool_errors for any unhandled exception.
     """
-    df = fetch_df(symbol, period=period, interval=interval)
-
-    if df.empty:
-        raise ValueError(f"No data returned for symbol: {symbol!r}")
+    # fetch_df raises DataFetchError / DataParseError / MaxRetriesExceeded.
+    # All are AgentError subclasses — @handle_tool_errors wraps anything
+    # that escapes as ToolExecutionError, so no bare except needed here.
+    df = _fetch_df(symbol, period=period, interval=interval)
 
     return {
         "ticker":          symbol,
-        "price_levels":    compute_price_levels(df),
-        "moving_averages": compute_moving_averages(df),
-        "rsi":             compute_rsi(df),
-        "macd":            compute_macd(df),
-        "bollinger":       compute_bollinger(df),
-        "atr":             compute_atr(df),
-        "vwma":            compute_vwma(df),
-        "mfi":             compute_mfi(df),
-        "volume":          compute_volume(df),
+        "price_levels":    _compute_price_levels(df),
+        "moving_averages": _compute_moving_averages(df),
+        "rsi":             _compute_rsi(df),
+        "macd":            _compute_macd(df),
+        "bollinger":       _compute_bollinger(df),
+        "atr":             _compute_atr(df),
+        "vwma":            _compute_vwma(df),
+        "mfi":             _compute_mfi(df),
+        "volume":          _compute_volume(df),
     }
 
 
-# if __name__ == "__main__":
-#     print("Fetching technical snapshot …\n")
-#     snapshot = get_technical_snapshot("RELIANCE.NS")
-#     output = json.dumps(snapshot, indent=2)
-#     print(output)
+if __name__ == "__main__":
+    from core.logging import bootstrap_standalone
+    bootstrap_standalone(__file__)
+    
+    logger.info("Fetching technical snapshot …\n")
+    snapshot = get_technical_snapshot("RELIANCE.NS")
+    output = json.dumps(snapshot, indent=2)
+    print(output)
 
-#     with open("technical_snapshot.json", "w") as f:
-#         f.write(output)
+    with open("technical_snapshot.json", "w") as f:
+        f.write(output)
 
-#     print("\nSaved → technical_snapshot.json")
+    logger.info("\nSaved → technical_snapshot.json")
