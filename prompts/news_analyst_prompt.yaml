@@ -17,36 +17,6 @@ OBJECTIVE: >
   short-term and long-term market impact, incorporate time and priority relevance, 
   and generate a final actionable trading decision (BUY / SELL / HOLD).
 
-DATA_INPUT_INFORMATION:
-  news_data_format:
-    company_news:
-      status: "string"
-      articles:
-        - title: "string"
-          summary: "string"
-          published_at: "ISO timestamp"
-          source: "string"
-    indian_news:
-      status: "string"
-      ai_summary: "string"
-      articles:
-        - title: "string"
-          summary: "string"
-          published_at: "ISO timestamp"
-          source: "string"
-          priority: "high | medium | low"
-    global_news:
-      status: "string"
-      ai_summary: "string"
-      articles:
-        - title: "string"
-          summary: "string"
-          published_at: "ISO timestamp"
-          source: "string"
-          priority: "high | medium | low"
-  null_data_handling:
-    company_news: "If no news is available, strictly state: 'company_news: no news is available'"
-
 GOAL: >
   Produce a comprehensive, data-driven report analyzing the impact of recent news 
   with clear reasoning across company, global, and Indian contexts, and conclude 
