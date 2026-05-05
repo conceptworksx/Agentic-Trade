@@ -47,15 +47,13 @@ def build_graph_seq():
 
     # --- Sequential Edges ---
     # Flow: Start -> Market -> Fundamental -> Technical -> News -> Bull -> End
-    # work_flow.add_edge(START, "market_analyst")
-    # work_flow.add_edge("market_analyst", "fundamental_analyst")
-    # work_flow.add_edge("fundamental_analyst", "technical_analyst")
-    # work_flow.add_edge("technical_analyst", "news_analyst")
-    # work_flow.add_edge("news_analyst", "sector_analyst")
-    work_flow.add_edge(START, "sector_analyst")
-    work_flow.add_edge("sector_analyst", END)
-    # work_flow.add_edge("sector_analyst", "bull_researcher")
-    # work_flow.add_edge("bull_researcher", END)
+    work_flow.add_edge(START, "market_analyst")
+    work_flow.add_edge("market_analyst", "fundamental_analyst")
+    work_flow.add_edge("fundamental_analyst", "technical_analyst")
+    work_flow.add_edge("technical_analyst", "news_analyst")
+    work_flow.add_edge("news_analyst", "sector_analyst")
+    work_flow.add_edge("sector_analyst", "bull_researcher")
+    work_flow.add_edge("bull_researcher", END)
 
     return work_flow.compile()
 
