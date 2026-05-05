@@ -1,8 +1,10 @@
+from agents.analysis import sector_analyst
 from graph.state import AgentState
 from agents.analysis.market_analyst import MarketAnalyst
 from agents.analysis.news_analyst import NewsAnalyst
 from agents.analysis.technical_analyst import TechnicalAnalyst
 from agents.analysis.fundamental_analyst import FundamenetalAnalyst
+from agents.analysis.sector_analyst import SectorAnalyst
 from agents.research.bull_researcher import BullReseacher
 from core.error import handle_node_errors,validate_state
 from core.logging import get_logger
@@ -13,6 +15,7 @@ market_analyst = MarketAnalyst()
 fundamental_analyst = FundamenetalAnalyst()
 technical_analyst = TechnicalAnalyst()      
 news_analyst = NewsAnalyst()
+sector_analyst = SectorAnalyst()
 
 bull_researcher=BullReseacher()
 
@@ -40,6 +43,12 @@ def run_news_analyst(state: AgentState) -> dict:
     result = news_analyst.run(ticker=state["ticker_of_company"])
     time.sleep(30)
     return {"news_analyst_report": result}
+
+@handle_node_errors("sector_analyst")
+def run_sector_analyst(state: AgentState) -> dict:
+    result = sector_analyst.run(sector=state["sector_of_company"])
+    time.sleep(30)
+    return {"sector_analyst_report": result}
 
 @handle_node_errors("bull_researcher")
 def run_bull_researcher(state: AgentState) -> dict:
