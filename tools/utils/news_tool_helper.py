@@ -1,10 +1,26 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import yfinance as yf
+from tavily import TavilyClient
 from email.utils import parsedate_to_datetime
 from core.logging import get_logger
 logger = get_logger(__name__)
 
 
+
+def _safe_tavily_search(client: TavilyClient, query: str, domains: List[str], tag: str) -> Dict[str, Any]:
+    """Helper to handle raw Tavily network calls with error logging."""
+    try:
+        return client.search(
+            query=query,
+            search_depth="advanced",
+            topic="news",
+            max_results=7,
+            include_domains=domains,
+            include_answer=True,
+        )
+    except Exception as exc:
+        logger.exception(f"Tavily API call failed for query '{query}': {exc}")
+        return {"results": [], "answer": None}
 
 PRIORITY_ORDER = {"high": 3, "medium": 2, "low": 1}
 
