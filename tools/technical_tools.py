@@ -73,7 +73,7 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> dict[str,
     logger.info(f"Fetched {len(df)} bars | ticker={ticker}")
 
     result["data"] = df
-    result["status"] = "ok"
+    result["status"] = "success"
     return result
 
 
@@ -140,7 +140,7 @@ def compute_moving_averages(df: pd.DataFrame) -> dict[str, Any]:
             _compute_trend_alignment(above_count) if valid_mas > 0 else "UNKNOWN"
         )
 
-        result["status"] = "ok" if valid_mas == 4 else "partial"
+        result["status"] = "success" if valid_mas == 4 else "partial"
 
         logger.debug(
             f"Moving averages computed | status={result['status']} "
@@ -220,7 +220,7 @@ def compute_rsi(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
             "trending_up": cur > prv,
             "bull_divergence": bull_div,
             "bear_divergence": bear_div,
-            "status": "ok",
+            "status": "success",
         })
 
         if condition in ("OVERBOUGHT", "OVERSOLD"):
@@ -303,7 +303,7 @@ def compute_macd(df: pd.DataFrame) -> dict[str, Any]:
             "bearish_cross": bool(bearish_cross),
             "histogram_expanding": abs(cur_h) > abs(prv_h),
             "bias": "BULLISH" if cur_m > cur_s else "BEARISH",
-            "status": "ok",
+            "status": "success",
         })
 
         if bullish_cross:
@@ -415,7 +415,7 @@ def compute_bollinger(df: pd.DataFrame) -> dict[str, Any]:
             "breakout_down": bool(breakout_down),
             "upside_to_upper_pct": round((ub - price) / price * 100, 2) if price else None,
             "downside_to_lower_pct": round((price - lb) / price * 100, 2) if price else None,
-            "status": "ok",
+            "status": "success",
         })
 
         # --- logs ---
@@ -503,7 +503,7 @@ def compute_atr(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
                 "low": round(price - atr_val, 2),
                 "high": round(price + atr_val, 2),
             },
-            "status": "ok",
+            "status": "success",
         })
 
         logger.debug(
@@ -570,7 +570,7 @@ def compute_vwma(df: pd.DataFrame, window: int = 20) -> dict[str, Any]:
             "value": round(vwma_val, 2),
             "price_vs_vwma": pos,
             "signal": "BULLISH" if pos == "ABOVE" else "BEARISH",
-            "status": "ok",
+            "status": "success",
         })
 
         logger.debug(
@@ -635,7 +635,7 @@ def compute_mfi(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
             "value": round(mfi_val, 2),
             "condition": condition,
             "signal": signal,
-            "status": "ok",
+            "status": "success",
         })
 
         if condition in ("OVERBOUGHT", "OVERSOLD"):
@@ -704,7 +704,7 @@ def compute_volume(df: pd.DataFrame) -> dict[str, Any]:
             "avg_20d": round(avg20, 2),
             "ratio_5d_20d": round(ratio, 2) if ratio is not None else None,
             "surge": surge,
-            "status": "ok",
+            "status": "success",
         })
 
         logger.debug(
@@ -782,7 +782,7 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
             "pct_from_52w_high": round(pct_from_high, 2) if pct_from_high is not None else None,
             "pct_from_52w_low": round(pct_from_low, 2) if pct_from_low is not None else None,
             "rs_20d_pct": round(rs_20d, 2) if rs_20d is not None else None,
-            "status": "ok",
+            "status": "success",
         })
 
         logger.debug(
