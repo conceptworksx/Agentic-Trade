@@ -19,7 +19,6 @@ from core.error import (
 from core.logging import get_logger
 logger = get_logger(__name__)
 
-
 TICKERS: dict[str, str] = {
     "GSPC":  "^GSPC",
     "VIX":   "^VIX",
@@ -81,11 +80,12 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFr
     result["status"] = "success"
     return result
 
-
-def extract_metrics(status: str, ticker: str, df: pd.DataFrame) -> tuple[str, dict[str, Any]]:
+    
+def extract_metrics(ticker: str, status: str, df: pd.DataFrame | None) -> tuple[str, dict[str, Any]]:
     """
     Extract full metric set for a single market index.
-    Agent-safe: never raises, always returns structured output.
+    Fully agent-safe: no external guards required.
+    Always returns structured output.
     """
 
     logger.debug(f"Computing metrics | ticker={ticker}")
@@ -100,28 +100,33 @@ def extract_metrics(status: str, ticker: str, df: pd.DataFrame) -> tuple[str, di
         "error": None,
     }
 
-    if status == "failed":
-        logger.warning(f"Skipping metrics due to upstream failure | ticker={ticker}")
-        metrics["error"] = "upstream_data_failed"
+    if status != "success":
+        metrics["status"] = "skipped"
+        metrics["error"] = f"fetch_status={status}"
+        return ticker, metrics
+
+    if df is None or df.empty:
+        metrics["status"] = "failed"
+        metrics["error"] = "empty_or_missing_dataframe"
+        return ticker, metrics
+
+    if "Close" not in df.columns:
+        metrics["status"] = "failed"
+        metrics["error"] = "missing_close_column"
         return ticker, metrics
 
     try:
-        if "Close" not in df.columns:
-            metrics["error"] = "missing_close_column"
-            return ticker, metrics
-
-  
         try:
             high_pct, low_pct = _high_low_vs_avg(df)
         except Exception as e:
-            logger.warning(f"High/Low vs Avg failed | {e}")
+            logger.warning(f"High/Low vs Avg failed | {ticker} | {e}")
             high_pct, low_pct = None, None
 
         def safe_call(fn, *args):
             try:
                 return fn(*args)
             except Exception as e:
-                logger.warning(f"{fn.__name__} failed | {e}")
+                logger.warning(f"{fn.__name__} failed | {ticker} | {e}")
                 return None
 
         metrics.update({
@@ -133,52 +138,56 @@ def extract_metrics(status: str, ticker: str, df: pd.DataFrame) -> tuple[str, di
             "status": "ok",
         })
 
-        logger.info(f"Computed metrics for {ticker}")
-
+        logger.info(f"Computed metrics successfully | ticker={ticker}")
         return ticker, metrics
 
     except Exception as exc:
-        logger.exception(f"Unexpected error in metrics | ticker={ticker} | {exc}")
-        metrics["error"] = str(exc)
+        logger.exception(f"Unexpected metrics failure | ticker={ticker} | {exc}")
         metrics["status"] = "failed"
+        metrics["error"] = str(exc)
         return ticker, metrics
+    
+
 
 if __name__ == "__main__":
-    logger.info("Starting market pipeline")
+    print("Starting market pipeline")
 
     results = {}
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_ticker = {
+        future_to_name = {
             executor.submit(fetch_df, ticker_symbol): name
             for name, ticker_symbol in TICKERS.items()
         }
 
-        for future in as_completed(future_to_ticker):
-            name = future_to_ticker[future]
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
 
             try:
                 fetch_result = future.result()
             except Exception as exc:
-                logger.exception(f"Thread failed | ticker={name} | {exc}")
+                print(f"Thread failed | ticker={name} | {exc}")
                 results[name] = {
                     "fetch_status": "failed",
-                    "error": str(exc),
+                    "metrics": {
+                        "status": "failed",
+                        "error": str(exc),
+                    }
                 }
                 continue
 
-            status = fetch_result.get("status", "failed")
+            ticker = name
+            status = fetch_result.get("status")
             df = fetch_result.get("data")
 
-
-            _, metrics = extract_metrics(status, name, df)
+            _, metrics = extract_metrics(ticker, status, df)
 
             results[name] = {
                 "fetch_status": status,
-                "metrics": metrics,
+                "metrics": metrics
             }
 
-    logger.info("Market pipeline completed")
+    print("Market pipeline completed")
 
-    print(json.dumps(results, indent=2))
-
+    with open("market_snapshot.json", "w") as f:
+      f.write(json.dumps(results, indent=2))
