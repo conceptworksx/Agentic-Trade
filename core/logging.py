@@ -213,25 +213,3 @@ def get_logger(name: str) -> logging.Logger:
     """
     return logging.getLogger(name)
 
-def bootstrap_standalone(file: str) -> None:
-    """
-    Call from __main__ blocks when running a file directly.
-    Fixes sys.path and initialises logging in one call.
-
-    Usage:
-        if __name__ == "__main__":
-            from core.logging_config import bootstrap_standalone
-            bootstrap_standalone(__file__)
-    """
-    import sys
-    from pathlib import Path
-
-    # Walk up until we find the project root (contains main.py)
-    path = Path(file).resolve()
-    for parent in path.parents:
-        if (parent / "main.py").exists():
-            if str(parent) not in sys.path:
-                sys.path.insert(0, str(parent))
-            break
-
-    setup_logging()
