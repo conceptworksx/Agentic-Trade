@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
 )
 from sqlalchemy.orm import DeclarativeBase
-from config.settings import settings
+import config.settings as settings
 
 # Async engine for FastAPI runtime
 engine = create_async_engine(

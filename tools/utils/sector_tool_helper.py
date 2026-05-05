@@ -12,7 +12,8 @@ from typing import Any
 
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from config.settings import settings, model
+import config.settings as settings
+from config.settings import model
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import httpx
 
 from core.error import handle_tool_errors
 
-from config.settings import settings
+import config.settings as settings
 from core.constants import SectorName, get_sector_catalog
 from tools.utils.sector_tool_helper import select_sector_from_catalog
 

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi import HTTPException
 
-from config.settings import settings
+import config.settings as settings
 from service.database import PDFDocument, PDFListItem, PDFContentResponse, IngestResponse
 
 

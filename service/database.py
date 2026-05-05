@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql import func
 
-from config.settings import settings
+import config.settings as settings
 
 
 # ── Engine & Base ─────────────────────────────────────────────────────────────
