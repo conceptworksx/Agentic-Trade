@@ -22,7 +22,7 @@ def build_graph():
     work_flow.add_edge(START,"news_analyst")
 
     work_flow.add_edge("market_analyst", "bull_researcher")
-    work_flow.add_edge("fundamental_analyst","bull_researcher")
+    work_flow.add_edge("fundamental_analyst", "bull_researcher")
     work_flow.add_edge("technical_analyst", "bull_researcher")
     work_flow.add_edge("news_analyst", "bull_researcher")
     
@@ -53,7 +53,7 @@ def build_graph_seq():
     return work_flow.compile()
 
 try:
-    app = build_graph_seq()
+    app = build_graph()
 
 except Exception as e:
 
