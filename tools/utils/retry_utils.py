@@ -68,7 +68,7 @@ def retry_fetch(
     last_exc: Exception | None = None
 
     # Build a consistent origin tag shown in every log line for this retry chain
-    origin = f"{caller} → {label}" if caller else label
+    origin = f"{caller}-{label}" if caller else label
 
     for attempt in range(1, retries + 1):
         attempt_tag = f"[{origin}] attempt {attempt}/{retries}"
@@ -78,24 +78,24 @@ def retry_fetch(
 
             if not _is_empty(result):
                 if attempt > 1:
-                    logger.info(f"  ✓ {attempt_tag} succeeded")
+                    logger.info(f"{attempt_tag} succeeded")
                 return result
 
             # yfinance returned something but it was empty — treat as failure
             last_exc = DataFetchError(source=label, symbol=origin)
-            logger.warning(f"  ⚠ {attempt_tag} → empty result (no data returned)")
+            logger.warning(f"{attempt_tag} - empty result (no data returned)")
 
         except Exception as exc:
             last_exc = exc
-            logger.warning(f"  ✗ {attempt_tag} → {type(exc).__name__}: {exc}")
+            logger.warning(f"{attempt_tag} - {type(exc).__name__}: {exc}")
 
         if attempt < retries:
-            logger.info(f"  ↻ {attempt_tag} → retrying in {current_delay:.1f}s …")
+            logger.info(f"{attempt_tag} - retrying in {current_delay:.1f}s …")
             time.sleep(current_delay)
             current_delay *= backoff
 
     # All attempts exhausted — always raise, never return None silently
-    logger.error(f"  ✗ [{origin}] all {retries} attempts failed — raising MaxRetriesExceeded")
+    logger.error(f"[{origin}] all {retries} attempts failed — raising MaxRetriesExceeded")
     raise MaxRetriesExceeded(
         operation=origin,
         attempts=retries,
@@ -119,17 +119,23 @@ def with_retry(
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            # ── Label: what is being fetched ──────────────────────────────
+            # provides more specific information than __name__, a dotted path from the global scope
             label = fn.__qualname__
             if args:
                 label = f"{fn.__qualname__} [{args[0]}]"
             elif "symbol" in kwargs:
                 label = f"{fn.__qualname__} [{kwargs['symbol']}]"
 
-            # ── Caller: who triggered this retry chain ────────────────────
-            # Walk up one frame to get the direct call site (module + lineno).
-            # This makes every log line self-contained — no guesswork needed.
+            # Caller: identify where this function was invoked from 
+            # We inspect the current call stack to capture the *external call site*
+            # (i.e., the function/line that called the decorated function).
+            #
+            # This helps make logs self-contained:
+            # instead of just "fetch failed", we get
+            # "main.py:42 in update_prices → fetch failed"
             try:
+                # Get the current call stack as a list of frames
+                # The stack is ordered from oldest call → newest call (current line)
                 frame      = traceback.extract_stack()
                 call_frame = frame[-2]          # -1 is this wrapper, -2 is the caller
                 caller     = f"{call_frame.filename.split('/')[-1]}:{call_frame.lineno} in {call_frame.name}"
