@@ -2,7 +2,7 @@ from graph.state import AgentState
 from agents.analysis.market_analyst import MarketAnalyst
 from agents.analysis.news_analyst import NewsAnalyst
 from agents.analysis.technical_analyst import TechnicalAnalyst
-from agents.analysis.fundamental_analyst import FundamenetalAnalyst
+from agents.analysis.fundamental_analyst import FundamentalAnalyst
 from agents.research.bull_researcher import BullReseacher
 from core.error import handle_node_errors,validate_state
 from core.logging import get_logger
@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 import time
 
 market_analyst = MarketAnalyst() 
-fundamental_analyst = FundamenetalAnalyst()
+fundamental_analyst = FundamentalAnalyst()
 technical_analyst = TechnicalAnalyst()      
 news_analyst = NewsAnalyst()
 
