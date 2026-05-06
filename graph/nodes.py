@@ -41,6 +41,23 @@ def run_news_analyst(state: AgentState) -> dict:
     # time.sleep(30)
     return {"news_analyst_report": result}
 
+@handle_node_errors("aggregator")
+def run_aggregator(state: AgentState) -> dict:
+    validate_state(
+        state,
+        "market_analyst_report",
+        "fundamental_analyst_report",
+        "technical_analyst_report",
+        "news_analyst_report"
+    )
+
+    return {
+        "market_analysis_report": state["market_analyst_report"],
+        "fundamental_analysis_report": state["fundamental_analyst_report"],
+        "technical_analysis_report": state["technical_analyst_report"],
+        "news_analysis_report": state["news_analyst_report"],
+    }
+
 @handle_node_errors("bull_researcher")
 def run_bull_researcher(state: AgentState) -> dict:
     investment_debate=state["investment_debate"]
