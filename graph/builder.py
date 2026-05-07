@@ -60,7 +60,7 @@ def build_graph_seq():
     return work_flow.compile()
 
 try:
-    app = build_graph_seq()
+    app = build_graph()
 
 except Exception as e:
 

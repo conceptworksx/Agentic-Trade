@@ -24,10 +24,10 @@ ticker:
 {data.get("ticker")}
 
 company_sector_data_from_yfinance:
-{build_company_sector_input(data.get("ticker"), data.get("company_sector", {}))}
+{json.dumps(data.get("company_sector_input", ""), indent=2)}
 
 supported_sector_catalog:
-{format_sector_catalog(data.get("sector_catalog", []))}
+{json.dumps(data.get("formatted_catalog", ""), indent=2)}
 """
 
     return {"resolver_input": content}
@@ -62,8 +62,15 @@ class SectorAnalyst(BaseAgent):
             ("user", "{resolver_input}"),
         ])
 
+        pre_resolver_preparer = RunnableParallel({
+            "ticker": lambda x: x["ticker"],
+            "company_sector_input": lambda x: build_company_sector_input(x["ticker"], x["company_sector"]),
+            "formatted_catalog": lambda x: format_sector_catalog(x["sector_catalog"])
+        })
+
         self.sector_resolver_llm_chain = (
-            RunnableLambda(_build_sector_resolver_message)
+            pre_resolver_preparer
+            | RunnableLambda(_build_sector_resolver_message)
             | self.prompt_sector_resolver
             | self.llm
             | StrOutputParser()
