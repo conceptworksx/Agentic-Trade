@@ -13,6 +13,7 @@ def run_app(ticker: str):
     try:
         result = app.invoke({
                 "ticker_of_company":ticker,
+                "sector_of_company":"",
                 "investment_debate": {
                 "bull_thesis": "",
                 "bear_thesis": "",
@@ -68,4 +69,4 @@ def run_app(ticker: str):
 
 
 if __name__ == "__main__":
-    run_app("RELIANCE.NS")
+    run_app("PFC.NS")
