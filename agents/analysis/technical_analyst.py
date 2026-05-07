@@ -1,6 +1,6 @@
 import json
 from langchain_core.messages import HumanMessage 
-from langchain_core.runnables import RunnableLambda, RunnableParallel
+from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableBranch
 from langchain_core.output_parsers import StrOutputParser
 from agents.base_agent import BaseAgent
 from tools.technical_tools import (
@@ -95,16 +95,32 @@ class TechnicalAnalyst(BaseAgent):
             }
         )
 
-
-        self.chain = (
-            technical_fetcher
-            | prep
-            | process_technical_data
+        success_chain = (
+            process_technical_data
             | RunnableLambda(_build_messages)
             | self.prompt
             | self.llm
             | StrOutputParser()
         )
+
+        error_chain = RunnableLambda(
+            lambda x: f"Failed to fetch technical data: {x.get('error', 'Unknown error')}"
+        )
+
+        branching_chain = RunnableBranch(
+            (
+                lambda x: x.get("status") == "success",
+                success_chain,
+            ),
+            error_chain,
+        )
+
+        self.chain = (
+            technical_fetcher
+            | prep
+            | branching_chain
+        )
+
 
     def run(self, ticker: str):
         return self.chain.invoke({"ticker": ticker})
