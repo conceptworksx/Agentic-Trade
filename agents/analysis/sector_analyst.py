@@ -8,8 +8,9 @@ from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableB
 from agents.base_agent import BaseAgent, load_structured_prompt
 from core.constants import get_sector_catalog
 from core.logging import get_logger
-from tools.sector_tools import fetch_sector_payload, get_company_sector
-from tools.utils.sector_tool_helper import (
+from tools.sector_tools import (
+    fetch_sector_payload,
+    get_company_sector,
     parse_sector_resolver_output,
 )
 

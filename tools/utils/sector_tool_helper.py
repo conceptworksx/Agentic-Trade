@@ -1,13 +1,19 @@
 """
 Sector helper logic used by SectorAnalyst for mapping and parsing.
+Contains internal support functions for API fetching and JSON parsing.
 """
 
 import json
 import logging
 import re
 from typing import Any
+from urllib.parse import quote
 
+import httpx
+
+import config.settings as settings
 from core.constants import SectorName
+from tools.utils.retry_utils import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -55,42 +61,57 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return result
 
 
-def parse_sector_resolver_output(text: str) -> dict[str, Any]:
+@with_retry(retries=3, delay=2.0, backoff=2.0)
+def _fetch_sector_api_data(api_url: str, sector_name: str) -> Any:
+    """Internal helper to execute the HTTP request to the PDF/Sector API."""
+    with httpx.Client(timeout=120.0) as client:
+        response = client.get(api_url)
+
+    if response.status_code >= 400:
+        logger.error(f"API error {response.status_code} | sector={sector_name}")
+        return {"error": f"Sector API returned {response.status_code}"}
+
+    return response.json()
+
+
+def _fetch_sector_data(sector_name: str) -> dict[str, Any]:
     """
-    Parse and validate the output of the Sector Resolver LLM.
-    Ensures the identified sector is within the official SectorName catalog.
+    Fetch the structured PDF analysis payload for a validated catalog sector.
     """
+    sector_name = str(sector_name).strip()
+    api_path = f"/pdf/{quote(sector_name, safe='')}"
+    api_url = f"{settings.API_BASE_URL.rstrip('/')}{api_path}"
+    
     result = {
         "status": "failed",
-        "sector_name": None,
-        "confidence": 0.0,
-        "reason": None,
-        "raw_output": text,
+        "sector": sector_name,
+        "api_url": api_url,
+        "data": None,
         "error": None,
     }
 
-    parsed_result = _parse_json_object(text)
-    if parsed_result["status"] != "success":
-        result["error"] = parsed_result["error"]
-        return result
-
-    parsed = parsed_result["data"]
-    sector_name = str(parsed.get("sector_name", "")).strip()
+    # Final safety check against the official sector list
     valid_sector_names = {sector.value for sector in SectorName}
-
     if sector_name not in valid_sector_names:
-        result["error"] = f"Identified sector {sector_name!r} is not in the supported catalog"
+        result["error"] = f"Sector {sector_name!r} is not in the supported catalog"
         return result
+
+    logger.info(f"Requesting sector report | sector={sector_name}")
 
     try:
-        confidence = float(parsed.get("confidence", 0))
-    except (TypeError, ValueError):
-        confidence = 0.0
+        result["data"] = _fetch_sector_api_data(api_url, sector_name)
+        if isinstance(result["data"], dict) and "error" in result["data"]:
+             result["error"] = result["data"]["error"]
+        else:
+            result["status"] = "success"
+        return result
 
-    result.update({
-        "status": "success",
-        "sector_name": sector_name,
-        "confidence": round(max(0.0, min(1.0, confidence)), 4),
-        "reason": str(parsed.get("reason", "")).strip(),
-    })
-    return result
+    except httpx.RequestError as exc:
+        logger.error(f"Network error | sector={sector_name} | {exc}")
+        result["error"] = f"Network connection failed: {exc}"
+        return result
+
+    except Exception as exc:
+        logger.exception(f"Unexpected error fetching sector data | sector={sector_name}")
+        result["error"] = f"An unexpected error occurred: {exc}"
+        return result
