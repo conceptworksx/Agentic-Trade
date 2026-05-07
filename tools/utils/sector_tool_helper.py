@@ -13,34 +13,39 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
-    """Parse the first JSON object out of an LLM response string."""
+    """
+    Extract and parse the first valid JSON object from a potentially messy LLM response.
+    Returns a status dict containing the parsed data or an error message.
+    """
     result = {
         "status": "failed",
         "data": None,
         "error": None,
     }
 
-    raw_text = "" if text is None else str(text)
+    raw_text = "" if text is None else str(text).strip()
 
     try:
+        # Fast path: exact JSON match
         parsed = json.loads(raw_text)
     except json.JSONDecodeError:
+        # Slow path: find JSON within text blocks or markdown code fences
         match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
         if not match:
-            result["error"] = "LLM did not return a JSON object."
+            result["error"] = "LLM response did not contain a valid JSON object."
             return result
 
         try:
             parsed = json.loads(match.group(0))
         except json.JSONDecodeError as exc:
-            result["error"] = f"Failed to parse JSON object: {exc}"
+            result["error"] = f"Failed to parse identified JSON block: {exc}"
             return result
     except TypeError as exc:
-        result["error"] = f"Invalid JSON input: {exc}"
+        result["error"] = f"Invalid JSON input type: {exc}"
         return result
 
     if not isinstance(parsed, dict):
-        result["error"] = "LLM JSON response must be a dict."
+        result["error"] = "Extracted JSON must be an object (dictionary)."
         return result
 
     result.update({
@@ -50,49 +55,10 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return result
 
 
-def _is_missing(value: Any) -> bool:
-    return value is None or str(value).strip().lower() in {"", "n/a", "na", "none", "unknown"}
-
-
-def build_company_sector_input(company: str, company_sector: dict[str, Any]) -> str:
-    """
-    Build the free-text sector resolver input from the rough yfinance sector.
-    Falls back to the original company/ticker when yfinance has no sector.
-    """
-    company_sector = company_sector or {}
-    parts = []
-
-    if not _is_missing(company_sector.get("sector")):
-        parts.append(f"rough_sector: {company_sector['sector']}")
-
-    if not _is_missing(company_sector.get("industry")):
-        parts.append(f"industry: {company_sector['industry']}")
-
-    if not _is_missing(company_sector.get("company")):
-        parts.append(f"company: {company_sector['company']}")
-
-    if not _is_missing(company_sector.get("business")):
-        parts.append(f"business_summary: {company_sector['business']}")
-
-    if not parts:
-        parts.append(f"company_or_ticker: {company}")
-
-    return "\n".join(parts)
-
-
-def format_sector_catalog(sector_catalog: list[dict[str, str]]) -> str:
-    """Format the supported sector catalog for the resolver prompt."""
-    sector_catalog = sector_catalog or []
-    return "\n".join(
-        f"- {sector.get('name')}: {sector.get('description')}"
-        for sector in sector_catalog
-        if isinstance(sector, dict)
-    )
-
-
 def parse_sector_resolver_output(text: str) -> dict[str, Any]:
     """
-    Parse and validate the explicit SectorAnalyst resolver LLM output.
+    Parse and validate the output of the Sector Resolver LLM.
+    Ensures the identified sector is within the official SectorName catalog.
     """
     result = {
         "status": "failed",
@@ -113,7 +79,7 @@ def parse_sector_resolver_output(text: str) -> dict[str, Any]:
     valid_sector_names = {sector.value for sector in SectorName}
 
     if sector_name not in valid_sector_names:
-        result["error"] = f"Unknown sector_name: {sector_name!r}"
+        result["error"] = f"Identified sector {sector_name!r} is not in the supported catalog"
         return result
 
     try:

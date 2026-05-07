@@ -84,9 +84,10 @@ async def ingest_pdf(pdf_name: str, db: AsyncSession) -> IngestResponse:
 
 
 def extract_text_from_pdf(pdf_path: str) -> tuple[str, int]:
-    """Extract text from PDF file. Returns (content, total_pages)."""
-    # For now, mock implementation. In real, use PyPDF2 or similar.
-    # Assume we need to add pypdf to dependencies.
+    """
+    Extract text and page count from a PDF file using the pypdf library.
+    Returns a tuple of (content_string, total_pages).
+    """
     try:
         from pypdf import PdfReader
     except ImportError:

@@ -20,13 +20,13 @@ logger = get_logger(__name__)
 @with_retry(retries=3, delay=2.0, backoff=2.0)
 def get_company_sector(ticker: str) -> dict[str, Any]:
     """
-    Fetch the rough company sector/industry from yfinance.
-
-    The sector returned here is intentionally raw. SectorAnalyst later maps it
-    to the supported Indian sector catalog before fetching the PDF report.
+    Fetch raw company metadata (sector, industry, summary) from yfinance.
+    
+    This provides the 'rough' classification that the SectorAnalyst will 
+    later map to the official supported Indian sector catalog.
     """
     normalized_ticker = str(ticker).strip().upper()
-    logger.info(f"Fetching rough company sector | ticker={normalized_ticker}")
+    logger.info(f"Fetching yfinance metadata | ticker={normalized_ticker}")
 
     result = {
         "status": "failed",
@@ -42,48 +42,47 @@ def get_company_sector(ticker: str) -> dict[str, Any]:
         stock = yf.Ticker(normalized_ticker)
         info = stock.info
 
-        if isinstance(info, dict) and info:
-            company_name = info.get("longName", "N/A")
-            sector = info.get("sector", "N/A")
-            industry = info.get("industry", "N/A")
-            business = info.get("longBusinessSummary", "N/A")
-
+        # yfinance may return None or a dict containing error info
+        if info and isinstance(info, dict) :
             result.update({
                 "status": "success",
-                "company": company_name,
-                "sector": sector,
-                "industry": industry,
-                "business": business,
+                "company": info.get("longName", "N/A"),
+                "sector": info.get("sector", "N/A"),
+                "industry": info.get("industry", "N/A"),
+                "business": info.get("longBusinessSummary", "N/A"),
             })
         else:
-            logger.warning(f"No yfinance info found | ticker={normalized_ticker}")
-            result["error"] = "No data found for this ticker"
+            logger.warning(f"Incomplete or missing metadata from yfinance | ticker={normalized_ticker}")
+            result["error"] = "Ticker metadata is incomplete or not found."
 
     except Exception as exc:
-        logger.exception(f"Failed to fetch company sector | ticker={normalized_ticker}")
-        result["error"] = str(exc)
+        logger.error(f"yfinance error | ticker={normalized_ticker} | {exc}")
+        result["error"] = f"Failed to retrieve company info: {exc}"
 
     return result
 
 
 @with_retry(retries=3, delay=2.0, backoff=2.0)
 def _fetch_sector_api_data(api_url: str, sector_name: str) -> Any:
+    """Internal helper to execute the HTTP request to the PDF/Sector API."""
     with httpx.Client(timeout=120.0) as client:
         response = client.get(api_url)
 
     if response.status_code >= 400:
-        return {"error": f"Sector API returned {response.status_code} for {sector_name}"}
+        logger.error(f"API error {response.status_code} | sector={sector_name}")
+        return {"error": f"Sector API returned {response.status_code}"}
 
     return response.json()
 
 
 def fetch_sector_data(sector_name: str) -> dict[str, Any]:
     """
-    Fetch the structured PDF/API payload for one validated catalog sector.
+    Fetch the structured PDF analysis payload for a validated catalog sector.
     """
     sector_name = str(sector_name).strip()
     api_path = f"/pdf/{quote(sector_name, safe='')}"
     api_url = f"{settings.API_BASE_URL.rstrip('/')}{api_path}"
+    
     result = {
         "status": "failed",
         "sector": sector_name,
@@ -92,47 +91,52 @@ def fetch_sector_data(sector_name: str) -> dict[str, Any]:
         "error": None,
     }
 
+    # Final safety check against the official sector list
     valid_sector_names = {sector.value for sector in SectorName}
     if sector_name not in valid_sector_names:
-        result["error"] = f"Unknown sector_name: {sector_name!r}"
+        result["error"] = f"Sector {sector_name!r} is not in the supported catalog"
         return result
 
-    logger.info(f"Fetching sector data | sector={sector_name}")
+    logger.info(f"Requesting sector report | sector={sector_name}")
 
     try:
         result["data"] = _fetch_sector_api_data(api_url, sector_name)
-        result["status"] = "success"
+        if isinstance(result["data"], dict) and "error" in result["data"]:
+             result["error"] = result["data"]["error"]
+        else:
+            result["status"] = "success"
         return result
 
     except httpx.RequestError as exc:
-        logger.error(f"Network error fetching sector data | sector={sector_name} | {exc}")
-        result["error"] = f"Network error while fetching sector data: {exc}"
+        logger.error(f"Network error | sector={sector_name} | {exc}")
+        result["error"] = f"Network connection failed: {exc}"
         return result
 
     except Exception as exc:
-        logger.exception(f"Failed to fetch sector data | sector={sector_name}")
-        result["error"] = str(exc)
+        logger.exception(f"Unexpected error fetching sector data | sector={sector_name}")
+        result["error"] = f"An unexpected error occurred: {exc}"
         return result
 
 
 def fetch_sector_payload(data: dict) -> dict:
     """
-    Add sector_data to a resolved-sector payload.
-
-    If sector resolution failed, keep the chain payload structured and mark the
-    sector fetch as skipped instead of calling the API with an invalid sector.
+    Adapter function for the LangChain pipeline to inject sector_data.
+    
+    If prior sector resolution failed, it skips the API call to maintain 
+    efficiency and structured error reporting.
     """
     result = {**data}
     resolved_sector = result.get("resolved_sector", {})
     sector_name = resolved_sector.get("sector_name")
 
     if resolved_sector.get("status") != "success" or not sector_name:
+        logger.warning(f"Skipping sector fetch | reason=resolution_failed")
         result["sector_data"] = {
             "status": "skipped",
             "sector": sector_name,
             "api_url": None,
             "data": None,
-            "error": resolved_sector.get("error") or "sector_resolution_failed",
+            "error": resolved_sector.get("error") or "Sector resolution failed",
         }
         return result
 
