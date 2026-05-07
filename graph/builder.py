@@ -23,18 +23,12 @@ def build_graph():
     work_flow.add_edge(START,"technical_analyst")
     work_flow.add_edge(START,"news_analyst")
     work_flow.add_edge(START,"sector_analyst")
-
-    # work_flow.add_edge("market_analyst", "bull_researcher")
-    # work_flow.add_edge("fundamental_analyst", "bull_researcher")
-    # work_flow.add_edge("technical_analyst", "bull_researcher")
-    # work_flow.add_edge("news_analyst", "bull_researcher")
-    
-    # work_flow.add_edge("bull_researcher", END)
     
     work_flow.add_edge("market_analyst", "aggregator")
     work_flow.add_edge("fundamental_analyst", "aggregator")
     work_flow.add_edge("technical_analyst", "aggregator")
     work_flow.add_edge("news_analyst", "aggregator")
+    work_flow.add_edge("sector_analyst", "aggregator")
 
     work_flow.add_edge("aggregator", END)
 
@@ -54,7 +48,7 @@ def build_graph_seq():
     work_flow.add_node("bull_researcher", nodes.run_bull_researcher)
 
     # # --- Sequential Edges ---
-    # # Flow: Start -> Market -> Fundamental -> Technical -> News -> Bull -> End
+    # # Flow: Start -> Market -> Fundamental -> Technical -> News -> Sector -> Bull -> End
     work_flow.add_edge(START, "market_analyst")
     work_flow.add_edge("market_analyst", "fundamental_analyst")
     work_flow.add_edge("fundamental_analyst", "technical_analyst")
@@ -66,11 +60,10 @@ def build_graph_seq():
     return work_flow.compile()
 
 try:
-    app = build_graph()
+    app = build_graph_seq()
 
 except Exception as e:
 
     raise RuntimeError(f"Graph validation failed: {e}")
-
 
 

@@ -1,7 +1,7 @@
-from agents.analysis import sector_analyst
 from graph.state import AgentState
 from agents.analysis.market_analyst import MarketAnalyst
 from agents.analysis.news_analyst import NewsAnalyst
+from agents.analysis.sector_analyst import SectorAnalyst
 from agents.analysis.technical_analyst import TechnicalAnalyst
 from agents.analysis.fundamental_analyst import FundamentalAnalyst
 from agents.research.bull_researcher import BullReseacher
@@ -43,6 +43,12 @@ def run_news_analyst(state: AgentState) -> dict:
     # time.sleep(30)
     return {"news_analyst_report": result}
 
+@handle_node_errors("sector_analyst")
+def run_sector_analyst(state: AgentState) -> dict:
+    result = sector_analyst.run(ticker=state["ticker_of_company"])
+    # time.sleep(30)
+    return {"sector_analyst_report": result}
+
 @handle_node_errors("aggregator")
 def run_aggregator(state: AgentState) -> dict:
     validate_state(
@@ -50,7 +56,8 @@ def run_aggregator(state: AgentState) -> dict:
         "market_analyst_report",
         "fundamental_analyst_report",
         "technical_analyst_report",
-        "news_analyst_report"
+        "news_analyst_report",
+        "sector_analyst_report"
     )
 
     return {
@@ -58,6 +65,7 @@ def run_aggregator(state: AgentState) -> dict:
         "fundamental_analysis_report": state["fundamental_analyst_report"],
         "technical_analysis_report": state["technical_analyst_report"],
         "news_analysis_report": state["news_analyst_report"],
+        "sector_analysis_report": state["sector_analyst_report"],
     }
 
 @handle_node_errors("bull_researcher")
@@ -85,5 +93,4 @@ def run_bull_researcher(state: AgentState) -> dict:
     }
     
     return { "investment_debate" : updated_investment_debate}
-
 
