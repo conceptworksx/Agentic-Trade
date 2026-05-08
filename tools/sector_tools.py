@@ -38,7 +38,7 @@ def get_company_sector(ticker: str) -> dict[str, Any]:
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
-        print(info)
+
         # yfinance may return None or a dict containing error info
         if (
             isinstance(info, dict)
