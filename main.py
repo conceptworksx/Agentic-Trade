@@ -1,29 +1,30 @@
 import logging
 from core.error import (
-    NodeExecutionError, RateLimitError, AuthenticationError,
-    TokenLimitError, ToolCallError, MaxRetriesExceeded, AgentError
+    NodeExecutionError,
+    RateLimitError,
+    AuthenticationError,
+    TokenLimitError,
+    ToolCallError,
+    MaxRetriesExceeded,
+    AgentError,
 )
 from core.logging import setup_logging
-setup_logging()      
+
+setup_logging()
 
 from graph.builder import app
 
 
 def run_app(ticker: str):
     try:
-        result = app.invoke({
-                "ticker_of_company":ticker,
-                "sector_of_company":"",
+        result = app.invoke(
+            {
+                "ticker_of_company": ticker,
                 "investment_debate": {
-                "bull_thesis": "",
-                "bear_thesis": "",
-                "debate_history": "",
-                "final_decision": "",
-                "current_response": "",
-                "debate_rounds": 0  
-                 },
-                "messages":[]
-        })
+                    "debate_rounds": 0,
+                },
+            }
+        )
 
         return result
 
@@ -44,8 +45,7 @@ def run_app(ticker: str):
 
     except ToolCallError as e:
         logging.error(
-            f"Tool call failed: {e}\n"
-            f"Failed generation: {e.failed_generation[:500]}"
+            f"Tool call failed: {e}\n" f"Failed generation: {e.failed_generation[:500]}"
         )
         raise
 

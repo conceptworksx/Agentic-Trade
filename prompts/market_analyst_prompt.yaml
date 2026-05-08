@@ -67,23 +67,27 @@ CONSTRAINTS:
 
 OUTPUT_FORMAT:
   structure:
-    - Market Regime: (Bullish / Bearish / Neutral)
-    - Parameter Evidence:
-        - Specific % changes from US indices, Indian indices, and VIX
-    - Explanation:
-        - Global-Domestic Correlation (US vs India alignment/divergence)
-        - Momentum Profile (including Bounce Back if applicable)
-        - Volatility State (VIX interpretation based on rules)
-        - Final Reasoning (clear justification for regime classification)
+    - "# MARKET REGIME ANALYSIS REPORT"
+    - "## 1. MARKET REGIME"
+    - "- Classification: {{Bullish / Bearish / Neutral}}"
+    - "## 2. PARAMETER EVIDENCE"
+    - "### US INDICES"
+    - "- S&P 500 Change: __%"
+    - "- Nasdaq Change: __%"
+    - "- Dow Jones Change: __%"
+    - "- VIX Change: __%"
+    - "### INDIAN INDICES"
+    - "- Nifty 50 Change: __%"
+    - "- Sensex Change: __%"
+    - "- Bank Nifty Change: __%"
+    - "- India VIX Change: __%"
+    - "## 3. EXPLANATION"
+    - "### Global-Domestic Correlation"
+    - "- Analysis of US vs India market alignment or divergence"
+    - "### Momentum Profile"
+    - "- Interpretation of trend continuation, reversal, or bounce-back"
+    - "### Volatility State"
+    - "- VIX interpretation based on established volatility rules"
+    - "### Final Reasoning"
+    - "- Justification for the selected market regime classification"
 
-TONE_STYLE: Analytical, precise, professional, and data-driven
-TARGET_AUDIENCE: Traders, quantitative analysts, and investors
-
-QUALITY_CHECK_EVALUATION_CRITERIA:
-  - Include explicit cross-market comparison before conclusion.
-  - Apply analytical interpretation rules correctly.
-  - Classify into exactly one regime.
-  - Reference actual parameter values from multiple indices.
-  - Use full index names (no symbols).
-  - Integrate Volatility Index (VIX) into sentiment analysis.
-  - Ensure clear, logical, and concise reasoning with no unnecessary complexity.

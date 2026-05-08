@@ -4,28 +4,74 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from tools.utils.retry_utils import with_retry
-from tools.utils.market_tool_helper import(
-    _10d_pct_change,_monthly_10d_pct_change,
-    _quarterly_pct_change,_high_low_vs_avg
-)
-from core.error import (
-    handle_tool_errors,
-    DataFetchError,
-    DataParseError,
-    ToolExecutionError,
-    MaxRetriesExceeded,
-    AgentError,
+from tools.utils.market_tool_helper import (
+    _10d_pct_change,
+    _monthly_10d_pct_change,
+    _quarterly_pct_change,
+    _high_low_vs_avg,
 )
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 
 TICKERS: dict[str, str] = {
-    "GSPC":  "^GSPC",
-    "VIX":   "^VIX",
-    "NSEI":  "^NSEI",
+    "GSPC": "^GSPC",
+    "VIX": "^VIX",
+    "NSEI": "^NSEI",
     "BSESN": "^BSESN",
-    "IXIC":  "^IXIC",
+    "IXIC": "^IXIC",
 }
+
+
+def process_market_data(_):
+
+    processed = {}
+
+    success_count = 0
+
+    errors = []
+
+    def fetch_single(name, ticker):
+
+        result = fetch_df(ticker)
+
+        return name, result
+
+    with ThreadPoolExecutor(max_workers=len(TICKERS)) as executor:
+
+        futures = [
+            executor.submit(fetch_single, name, ticker)
+            for name, ticker in TICKERS.items()
+        ]
+
+        for future in as_completed(futures):
+
+            try:
+
+                name, result = future.result()
+
+                if result["status"] != "success":
+
+                    errors.append(f"{name}: {result.get('error')}")
+
+                    continue
+
+                processed[name] = extract_metrics(
+                    name, result["status"], result["data"]
+                )
+
+                success_count += 1
+
+            except Exception as e:
+
+                errors.append(str(e))
+
+    if success_count == 0:
+
+        return {"status": "failed", "error": "\n".join(errors)}
+
+    return {"status": "success", **processed}
+
 
 @with_retry(retries=3, delay=2.0, backoff=2.0)
 def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
@@ -41,20 +87,16 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFr
         "ticker": ticker,
         "source": "yfinance",
     }
-    
+
     try:
         df = yf.download(
-            ticker, 
-            period=period, 
-            interval=interval, 
-            auto_adjust=True, 
-            progress=False
+            ticker, period=period, interval=interval, auto_adjust=True, progress=False
         )
     except Exception as exc:
         logger.exception(f"yfinance.download failed | ticker={ticker} | {exc}")
         result["error"] = f"download_failed: {exc}"
         return result
-    
+    df = df.dropna()
     if df is None or df.empty:
         logger.warning(f"Empty DataFrame | ticker={ticker}")
         result["error"] = "empty_dataframe"
@@ -70,7 +112,7 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFr
     except Exception as exc:
         logger.exception(f"Normalization failed | ticker={ticker} | {exc}")
         result["error"] = f"parse_error: {exc}"
-        result["data"] = df 
+        result["data"] = df
         result["status"] = "partial"
         return result
 
@@ -78,10 +120,13 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFr
 
     result["data"] = df
     result["status"] = "success"
+
     return result
 
-    
-def extract_metrics(ticker: str, status: str, df: pd.DataFrame | None) -> tuple[str, dict[str, Any]]:
+
+def extract_metrics(
+    ticker: str, status: str, df: pd.DataFrame | None
+) -> tuple[str, dict[str, Any]]:
     """
     Extract full metric set for a single market index.
     Fully agent-safe: no external guards required.
@@ -129,14 +174,16 @@ def extract_metrics(ticker: str, status: str, df: pd.DataFrame | None) -> tuple[
                 logger.warning(f"{fn.__name__} failed | {ticker} | {e}")
                 return None
 
-        metrics.update({
-            "10d_pct_change": safe_call(_10d_pct_change, df["Close"]),
-            "monthly_10d_pct_change": safe_call(_monthly_10d_pct_change, df),
-            "quarterly_pct_change": safe_call(_quarterly_pct_change, df),
-            "high_to_avg_change_pct": high_pct,
-            "low_to_avg_change_pct": low_pct,
-            "status": "ok",
-        })
+        metrics.update(
+            {
+                "10d_pct_change": safe_call(_10d_pct_change, df["Close"]),
+                "monthly_10d_pct_change": safe_call(_monthly_10d_pct_change, df),
+                "quarterly_pct_change": safe_call(_quarterly_pct_change, df),
+                "high_to_avg_change_pct": high_pct,
+                "low_to_avg_change_pct": low_pct,
+                "status": "success",
+            }
+        )
 
         logger.info(f"Computed metrics successfully | ticker={ticker}")
         return ticker, metrics
@@ -146,7 +193,6 @@ def extract_metrics(ticker: str, status: str, df: pd.DataFrame | None) -> tuple[
         metrics["status"] = "failed"
         metrics["error"] = str(exc)
         return ticker, metrics
-    
 
 
 if __name__ == "__main__":
@@ -172,7 +218,7 @@ if __name__ == "__main__":
                     "metrics": {
                         "status": "failed",
                         "error": str(exc),
-                    }
+                    },
                 }
                 continue
 
@@ -182,12 +228,9 @@ if __name__ == "__main__":
 
             _, metrics = extract_metrics(ticker, status, df)
 
-            results[name] = {
-                "fetch_status": status,
-                "metrics": metrics
-            }
+            results[name] = {"fetch_status": status, "metrics": metrics}
 
     print("Market pipeline completed")
 
     with open("market_snapshot.json", "w") as f:
-      f.write(json.dumps(results, indent=2))
+        f.write(json.dumps(results, indent=2))

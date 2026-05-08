@@ -1,5 +1,8 @@
 import json
 import warnings
+import yfinance as yf
+from typing import Any, Dict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 import pandas as pd
 from tools.utils.fundamental_tool_helper import (
@@ -10,19 +13,53 @@ from tools.utils.fundamental_tool_helper import (
     _series_to_dict,
     _ratio_dict,
     _safe_get,
-    _margin
+    _margin,
 )
+from tools.utils.retry_utils import with_retry
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 
 warnings.filterwarnings("ignore")
 
 
-import yfinance as yf
-from typing import Any, Dict
-from concurrent.futures import ThreadPoolExecutor
+def process_fundamental_data(x):
+
+    ticker = x["ticker"]
+
+    fetch_result = ticker_data(ticker)
+    if fetch_result["status"] != "success":
+
+        return {
+            "ticker": ticker,
+            "status": "failed",
+            "error": fetch_result["error"],
+        }
+
+    return {
+        "ticker": ticker,
+        "status": "success",
+        "income_stmt": fetch_income_stmt(fetch_result["financials"]),
+        "balance_sheet": fetch_balance_sheet(
+            fetch_result["balance_sheet"],
+            fetch_result["info"],
+        ),
+        "cash_flow": fetch_cash_flow(fetch_result["cash_flow"]),
+        "fundamentals": fetch_fundamentals(
+            fetch_result["financials"],
+            fetch_result["balance_sheet"],
+        ),
+        "eps_trend": fetch_eps_trend(fetch_result["financials"]),
+        "valuation": fetch_valuation(
+            fetch_result["info"],
+            fetch_result["major_holders"],
+        ),
+        "growth": fetch_growth(fetch_result["financials"]),
+    }
+
 
 def ticker_data(ticker: str) -> Dict[str, Any]:
+
     logger.info(f"Fetching all financial data for {ticker}")
 
     result = {
@@ -37,6 +74,7 @@ def ticker_data(ticker: str) -> Dict[str, Any]:
     }
 
     try:
+
         t = yf.Ticker(ticker)
 
         def get_financials():
@@ -49,13 +87,33 @@ def ticker_data(ticker: str) -> Dict[str, Any]:
             return t.cash_flow
 
         def get_info():
-            i = t.info
-            return i if isinstance(i, dict) else {}
+
+            i = t.info()
+            if not isinstance(i, dict):
+                return {}
+
+            cleaned = {
+                k: v
+                for k, v in i.items()
+                if v
+                not in (
+                    None,
+                    "None",
+                    "null",
+                    "Null",
+                    "",
+                    [],
+                    {},
+                )
+            }
+
+            return cleaned
 
         def get_holders():
             return t.major_holders
 
         with ThreadPoolExecutor(max_workers=5) as executor:
+
             futures = {
                 "financials": executor.submit(get_financials),
                 "balance_sheet": executor.submit(get_balance_sheet),
@@ -65,67 +123,54 @@ def ticker_data(ticker: str) -> Dict[str, Any]:
             }
 
             for key, future in futures.items():
+
                 try:
                     result[key] = future.result()
+
                 except Exception as e:
                     logger.warning(f"{key} fetch failed: {e}")
+
+        financials_empty = result["financials"] is None or result["financials"].empty
+
+        balance_sheet_empty = (
+            result["balance_sheet"] is None or result["balance_sheet"].empty
+        )
+
+        cash_flow_empty = result["cash_flow"] is None or result["cash_flow"].empty
+
+        info_empty = not result["info"]
+
+        holders_empty = result["major_holders"] is None or result["major_holders"].empty
+
+        # ALL empty => invalid ticker / unusable data
+        if all(
+            [
+                financials_empty,
+                balance_sheet_empty,
+                cash_flow_empty,
+                info_empty,
+                holders_empty,
+            ]
+        ):
+
+            result["status"] = "failed"
+            result["error"] = (
+                f"No financial data available for ticker '{ticker}'. "
+                f"Ticker may be invalid, delisted, or unsupported."
+            )
 
         return result
 
     except Exception as exc:
+
         logger.exception(f"Failed to fetch data for {ticker}")
-        result["status"] = "error"
+        result["status"] = "failed"
         result["error"] = str(exc)
         return result
 
-# def ticker_data(ticker: str) -> Dict[str, Any]:
-#     """
-#     Fetch all raw financial datasets for a ticker.
-
-#     Always returns a structured response (never raises),
-#     so it is safe to use inside Runnable chains.
-#     """
-
-#     logger.info(f"Fetching all financial data for {ticker}")
-
-#     result = {
-#         "status": "success",
-#         "ticker": ticker,
-#         "financials": None,
-#         "balance_sheet": None,
-#         "cash_flow": None,
-#         "info": {},
-#         "major_holders": None,
-#         "error": None,
-#     }
-
-#     try:
-#         # Object creation (can fail)
-#         t = yf.Ticker(ticker)
-
-#         # Data fetch (network-bound)
-#         result["financials"] = t.financials
-#         result["balance_sheet"] = t.balance_sheet
-#         result["cash_flow"] = t.cash_flow
-
-#         # info can sometimes break or be non-dict
-#         info = t.info
-#         result["info"] = info if isinstance(info, dict) else {}
-
-#         result["major_holders"] = t.major_holders
-
-#         return result
-
-#     except Exception as exc:
-#         logger.exception(f"Failed to fetch data for {ticker}")
-
-#         result["status"] = "error"
-#         result["error"] = str(exc)
-
-#         return result
 
 def fetch_income_stmt(df: pd.DataFrame) -> dict[str, Any]:
-    """Extract income statement metrics from a pre-fetched financials DataFrame."""
+    """Extract income statement metrics from a pre-fetched() financials DataFrame."""
     logger.info("Processing income statement")
 
     result = {
@@ -162,7 +207,7 @@ def fetch_income_stmt(df: pd.DataFrame) -> dict[str, Any]:
 
         result["status"] = "error"
         result["error"] = str(exc)
-        return result 
+        return result
 
 
 def fetch_balance_sheet(df: pd.DataFrame, info: dict) -> dict[str, Any]:
@@ -249,9 +294,11 @@ def fetch_cash_flow(df: pd.DataFrame) -> dict[str, Any]:
         )
 
         free_cash_flow = {
-            date: round(ocf[date] + capex[date], 2)
-            if ocf.get(date) is not None and capex.get(date) is not None
-            else None
+            date: (
+                round(ocf[date] + capex[date], 2)
+                if ocf.get(date) is not None and capex.get(date) is not None
+                else None
+            )
             for date in ocf
         }
 
@@ -270,7 +317,7 @@ def fetch_cash_flow(df: pd.DataFrame) -> dict[str, Any]:
         result["error"] = str(exc)
         return result
 
-        
+
 def fetch_fundamentals(inc: pd.DataFrame, bal: pd.DataFrame) -> dict[str, Any]:
     """Compute derived ratios from pre-fetched income + balance sheet DataFrames."""
     logger.info("Computing fundamental ratios")
@@ -311,15 +358,22 @@ def fetch_fundamentals(inc: pd.DataFrame, bal: pd.DataFrame) -> dict[str, Any]:
         equity = _df_row(bal, "Stockholders Equity", "Common Stock Equity")
 
         capital_employed = {
-            d: round(total_assets[d] - current_liab[d], 2)
-            if total_assets.get(d) is not None and current_liab.get(d) is not None else None
+            d: (
+                round(total_assets[d] - current_liab[d], 2)
+                if total_assets.get(d) is not None and current_liab.get(d) is not None
+                else None
+            )
             for d in total_assets
         }
 
         int_coverage = {
-            d: round(ebit[d] / abs(int_expense[d]), 2)
-            if ebit.get(d) is not None and int_expense.get(d) and int_expense[d] != 0
-            else None
+            d: (
+                round(ebit[d] / abs(int_expense[d]), 2)
+                if ebit.get(d) is not None
+                and int_expense.get(d)
+                and int_expense[d] != 0
+                else None
+            )
             for d in ebit
         }
 
@@ -327,9 +381,12 @@ def fetch_fundamentals(inc: pd.DataFrame, bal: pd.DataFrame) -> dict[str, Any]:
             "net_margin_pct": _margin(net_income, revenue),
             "roe_pct": _margin(net_income, equity),
             "roce_pct": {
-                d: round(_safe_divide(ebit.get(d), capital_employed.get(d)) * 100, 2)
-                if capital_employed.get(d) and _safe_divide(ebit.get(d), capital_employed.get(d)) is not None
-                else None
+                d: (
+                    round(_safe_divide(ebit.get(d), capital_employed.get(d)) * 100, 2)
+                    if capital_employed.get(d)
+                    and _safe_divide(ebit.get(d), capital_employed.get(d)) is not None
+                    else None
+                )
                 for d in ebit
             },
             "debt_to_equity": _ratio_dict(total_debt, equity),
@@ -345,6 +402,7 @@ def fetch_fundamentals(inc: pd.DataFrame, bal: pd.DataFrame) -> dict[str, Any]:
         result["status"] = "error"
         result["error"] = str(exc)
         return result
+
 
 def fetch_eps_trend(inc: pd.DataFrame) -> dict[str, Any]:
     """Extract EPS and compute CAGR from a pre-fetched financials DataFrame."""
@@ -383,6 +441,7 @@ def fetch_eps_trend(inc: pd.DataFrame) -> dict[str, Any]:
         result["status"] = "error"
         result["error"] = str(exc)
         return result
+
 
 def fetch_valuation(info: dict, major_holders: pd.DataFrame | None) -> dict[str, Any]:
     """Extract valuation ratios from pre-fetched info dict and major_holders DataFrame."""
@@ -423,7 +482,9 @@ def fetch_valuation(info: dict, major_holders: pd.DataFrame | None) -> dict[str,
                 "ev_ebitda": round(ev_ebitda, 2) if ev_ebitda is not None else None,
                 "peg_ratio": round(peg, 2) if peg is not None else None,
             },
-            "dividend_yield_pct": round(div_yield * 100, 4) if div_yield is not None else None,
+            "dividend_yield_pct": (
+                round(div_yield * 100, 4) if div_yield is not None else None
+            ),
             "promoter_holding_pct": promoter_pct,
         }
 
@@ -435,6 +496,7 @@ def fetch_valuation(info: dict, major_holders: pd.DataFrame | None) -> dict[str,
         result["status"] = "error"
         result["error"] = str(exc)
         return result
+
 
 def fetch_growth(inc: pd.DataFrame) -> dict[str, Any]:
     """Compute YoY and CAGR growth from a pre-fetched financials DataFrame."""
@@ -475,7 +537,7 @@ def fetch_growth(inc: pd.DataFrame) -> dict[str, Any]:
         result["status"] = "error"
         result["error"] = str(exc)
         return result
-    
+
 
 if __name__ == "__main__":
     import json
@@ -498,7 +560,9 @@ if __name__ == "__main__":
             "income_stmt": fetch_income_stmt(data["financials"]),
             "balance_sheet": fetch_balance_sheet(data["balance_sheet"], data["info"]),
             "cash_flow": fetch_cash_flow(data["cash_flow"]),
-            "fundamentals": fetch_fundamentals(data["financials"], data["balance_sheet"]),
+            "fundamentals": fetch_fundamentals(
+                data["financials"], data["balance_sheet"]
+            ),
             "eps_trend": fetch_eps_trend(data["financials"]),
             "valuation": fetch_valuation(data["info"], data["major_holders"]),
             "growth": fetch_growth(data["financials"]),

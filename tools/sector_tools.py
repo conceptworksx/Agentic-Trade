@@ -19,16 +19,15 @@ logger = get_logger(__name__)
 def get_company_sector(ticker: str) -> dict[str, Any]:
     """
     Fetch raw company metadata (sector, industry, summary) from yfinance.
-    
-    This provides the 'rough' classification that the SectorAnalyst will 
+
+    This provides the 'rough' classification that the SectorAnalyst will
     later map to the official supported Indian sector catalog.
     """
-    normalized_ticker = str(ticker).strip().upper()
-    logger.info(f"Fetching yfinance metadata | ticker={normalized_ticker}")
+    logger.info(f"Fetching yfinance metadata | ticker={ticker}")
 
     result = {
         "status": "failed",
-        "ticker": normalized_ticker,
+        "ticker": ticker,
         "company": None,
         "sector": None,
         "industry": None,
@@ -37,24 +36,34 @@ def get_company_sector(ticker: str) -> dict[str, Any]:
     }
 
     try:
-        stock = yf.Ticker(normalized_ticker)
+        stock = yf.Ticker(ticker)
         info = stock.info
-
+        print(info)
         # yfinance may return None or a dict containing error info
-        if info and isinstance(info, dict):
-            result.update({
-                "status": "success",
-                "company": info.get("longName", "N/A"),
-                "sector": info.get("sector", "N/A"),
-                "industry": info.get("industry", "N/A"),
-                "business": info.get("longBusinessSummary", "N/A"),
-            })
+        if (
+            isinstance(info, dict)
+            and info
+            and info.get("sector") not in [None, "", "N/A"]
+            and info.get("industry") not in [None, "", "N/A"]
+        ):
+
+            result.update(
+                {
+                    "status": "success",
+                    "company": info.get("longName", "N/A"),
+                    "sector": info.get("sector", "N/A"),
+                    "industry": info.get("industry", "N/A"),
+                    "business": info.get("longBusinessSummary", "N/A"),
+                }
+            )
         else:
-            logger.warning(f"Incomplete or missing metadata from yfinance | ticker={normalized_ticker}")
+            logger.warning(
+                f"Incomplete or missing metadata from yfinance | ticker={ticker}"
+            )
             result["error"] = "Ticker metadata is incomplete or not found."
 
     except Exception as exc:
-        logger.error(f"yfinance error | ticker={normalized_ticker} | {exc}")
+        logger.error(f"yfinance error | ticker={ticker} | {exc}")
         result["error"] = f"Failed to retrieve company info: {exc}"
 
     return result
@@ -63,8 +72,8 @@ def get_company_sector(ticker: str) -> dict[str, Any]:
 def fetch_sector_payload(data: dict) -> dict:
     """
     Adapter function for the LangChain pipeline to inject sector_data.
-    
-    If prior sector resolution failed, it skips the API call to maintain 
+
+    If prior sector resolution failed, it skips the API call to maintain
     efficiency and structured error reporting.
     """
     result = {**data}
@@ -110,7 +119,9 @@ def parse_sector_resolver_output(text: str) -> dict[str, Any]:
     valid_sector_names = {sector.value for sector in SectorName}
 
     if sector_name not in valid_sector_names:
-        result["error"] = f"Identified sector {sector_name!r} is not in the supported catalog"
+        result["error"] = (
+            f"Identified sector {sector_name!r} is not in the supported catalog"
+        )
         return result
 
     try:
@@ -118,10 +129,12 @@ def parse_sector_resolver_output(text: str) -> dict[str, Any]:
     except (TypeError, ValueError):
         confidence = 0.0
 
-    result.update({
-        "status": "success",
-        "sector_name": sector_name,
-        "confidence": round(max(0.0, min(1.0, confidence)), 4),
-        "reason": str(parsed.get("reason", "")).strip(),
-    })
+    result.update(
+        {
+            "status": "success",
+            "sector_name": sector_name,
+            "confidence": round(max(0.0, min(1.0, confidence)), 4),
+            "reason": str(parsed.get("reason", "")).strip(),
+        }
+    )
     return result

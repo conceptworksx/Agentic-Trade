@@ -4,93 +4,74 @@ from agents.analysis.news_analyst import NewsAnalyst
 from agents.analysis.sector_analyst import SectorAnalyst
 from agents.analysis.technical_analyst import TechnicalAnalyst
 from agents.analysis.fundamental_analyst import FundamentalAnalyst
-from agents.research.bull_researcher import BullReseacher
-from core.error import handle_node_errors,validate_state
+from core.error import handle_node_errors, validate_state
 from core.logging import get_logger
-logger = get_logger(__name__)
-import time
 
-market_analyst = MarketAnalyst() 
+logger = get_logger(__name__)
+
+
+market_analyst = MarketAnalyst()
 fundamental_analyst = FundamentalAnalyst()
-technical_analyst = TechnicalAnalyst()      
+technical_analyst = TechnicalAnalyst()
 news_analyst = NewsAnalyst()
 sector_analyst = SectorAnalyst()
-
-bull_researcher=BullReseacher()
 
 
 @handle_node_errors("market_analyst")
 def run_market_analyst(state: AgentState) -> dict:
     result = market_analyst.run()
-    # time.sleep(30)
     return {"market_analyst_report": result}
 
+
 @handle_node_errors("fundamental_analyst")
-def run_fundamental_analyst(state : AgentState) -> dict:
-    result = fundamental_analyst.run(ticker=state["ticker_of_company"])
-    # time.sleep(30)
-    return {"fundamental_analyst_report" : result}
+def run_fundamental_analyst(state: AgentState) -> dict:
+    result = fundamental_analyst.run(state)
+    return {"fundamental_analyst_report": result}
+
 
 @handle_node_errors("technical_analyst")
-def run_technical_analyst(state : AgentState) -> dict:
-    result = technical_analyst.run(ticker=state["ticker_of_company"])
-    # time.sleep(30)
-    return {"technical_analyst_report" : result} 
+def run_technical_analyst(state: AgentState) -> dict:
+    result = technical_analyst.run(state)
+    return {"technical_analyst_report": result}
+
 
 @handle_node_errors("news_analyst")
 def run_news_analyst(state: AgentState) -> dict:
     result = news_analyst.run(ticker=state["ticker_of_company"])
-    # time.sleep(30)
     return {"news_analyst_report": result}
+
 
 @handle_node_errors("sector_analyst")
 def run_sector_analyst(state: AgentState) -> dict:
     result = sector_analyst.run(ticker=state["ticker_of_company"])
-    # time.sleep(30)
     return {"sector_analyst_report": result}
+
 
 @handle_node_errors("aggregator")
 def run_aggregator(state: AgentState) -> dict:
+
     validate_state(
         state,
         "market_analyst_report",
         "fundamental_analyst_report",
         "technical_analyst_report",
         "news_analyst_report",
-        "sector_analyst_report"
+        "sector_analyst_report",
     )
 
-    return {
-        "market_analysis_report": state["market_analyst_report"],
-        "fundamental_analysis_report": state["fundamental_analyst_report"],
-        "technical_analysis_report": state["technical_analyst_report"],
-        "news_analysis_report": state["news_analyst_report"],
-        "sector_analysis_report": state["sector_analyst_report"],
+    final_report = {
+        "input": {
+            "ticker": state.get("ticker"),
+            "company": state.get("company"),
+            "query": state.get("query"),
+        },
+        "analysis": {
+            "market": state.get("market_analyst_report"),
+            "fundamental": state.get("fundamental_analyst_report"),
+            "technical": state.get("technical_analyst_report"),
+            "news": state.get("news_analyst_report"),
+            "sector": state.get("sector_analyst_report"),
+        },
     }
 
-@handle_node_errors("bull_researcher")
-def run_bull_researcher(state: AgentState) -> dict:
-    investment_debate=state["investment_debate"]
-    debate_history=investment_debate.get("debate_history","")
-    bear_thesis=investment_debate.get("bear_thesis","")
-    bull_thesis=investment_debate.get("bull_thesis" , "")
-    debate_rounds=investment_debate.get("debate_rounds", "")
-    market_analysis_report=state["market_analyst_report"]
-    fundamental_analysis_report=state["fundamental_analyst_report"]
-    technical_analysis_report=state["technical_analyst_report"]
-    news_analysis_report=state["news_analyst_report"]
-
-    result = bull_researcher.run(market_analysis_report,fundamental_analysis_report,technical_analysis_report,
-                                 news_analysis_report, debate_history,bear_thesis)
-    # time.sleep(30)
-    
-    updated_investment_debate={
-        "debate_history" : debate_history + "\n" + result,
-        "bull_thesis" : bull_thesis + "\n" + result,
-        "bear_thesis" : bear_thesis,
-        "current_response" : result,
-        "debate_rounds" : debate_rounds +1
-    }
-    
-    return { "investment_debate" : updated_investment_debate}
-
+    return {"final_report": final_report}
