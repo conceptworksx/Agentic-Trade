@@ -5,6 +5,7 @@ import traceback
 from typing import Any, Callable, TypeVar
 from core.error import MaxRetriesExceeded, DataFetchError
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -28,6 +29,7 @@ def _is_empty(result: Any) -> bool:
     # pandas DataFrame / Series
     try:
         import pandas as pd
+
         if isinstance(result, pd.DataFrame):
             return result.empty
         if isinstance(result, pd.Series):
@@ -50,12 +52,12 @@ def _is_empty(result: Any) -> bool:
 
 
 def retry_fetch(
-    fn:      Callable[[], Any],
-    retries: int   = 3,
-    delay:   float = 2.0,
+    fn: Callable[[], Any],
+    retries: int = 3,
+    delay: float = 2.0,
     backoff: float = 2.0,
-    label:   str   = "",
-    caller:  str   = "",
+    label: str = "",
+    caller: str = "",
 ) -> Any:
     """
     Call fn() and retry if the result is empty or an exception is raised.
@@ -95,7 +97,9 @@ def retry_fetch(
             current_delay *= backoff
 
     # All attempts exhausted — always raise, never return None silently
-    logger.error(f"[{origin}] all {retries} attempts failed — raising MaxRetriesExceeded")
+    logger.error(
+        f"[{origin}] all {retries} attempts failed — raising MaxRetriesExceeded"
+    )
     raise MaxRetriesExceeded(
         operation=origin,
         attempts=retries,
@@ -103,10 +107,9 @@ def retry_fetch(
     )
 
 
-
 def with_retry(
-    retries: int   = 3,
-    delay:   float = 2.0,
+    retries: int = 3,
+    delay: float = 2.0,
     backoff: float = 2.0,
 ) -> Callable[[F], F]:
     """
@@ -116,6 +119,7 @@ def with_retry(
     automatically as the log label. The call site (module + caller frame)
     is captured automatically and shown in every log line for this retry chain.
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -126,7 +130,7 @@ def with_retry(
             elif "symbol" in kwargs:
                 label = f"{fn.__qualname__} [{kwargs['symbol']}]"
 
-            # Caller: identify where this function was invoked from 
+            # Caller: identify where this function was invoked from
             # We inspect the current call stack to capture the *external call site*
             # (i.e., the function/line that called the decorated function).
             #
@@ -136,19 +140,21 @@ def with_retry(
             try:
                 # Get the current call stack as a list of frames
                 # The stack is ordered from oldest call → newest call (current line)
-                frame      = traceback.extract_stack()
-                call_frame = frame[-2]          # -1 is this wrapper, -2 is the caller
-                caller     = f"{call_frame.filename.split('/')[-1]}:{call_frame.lineno} in {call_frame.name}"
+                frame = traceback.extract_stack()
+                call_frame = frame[-2]  # -1 is this wrapper, -2 is the caller
+                caller = f"{call_frame.filename.split('/')[-1]}:{call_frame.lineno} in {call_frame.name}"
             except Exception:
                 caller = "unknown"
 
             return retry_fetch(
-                fn      = lambda: fn(*args, **kwargs),
-                retries = retries,
-                delay   = delay,
-                backoff = backoff,
-                label   = label,
-                caller  = caller,
+                fn=lambda: fn(*args, **kwargs),
+                retries=retries,
+                delay=delay,
+                backoff=backoff,
+                label=label,
+                caller=caller,
             )
+
         return wrapper  # type: ignore
+
     return decorator

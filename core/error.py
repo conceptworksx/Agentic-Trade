@@ -12,10 +12,11 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 class AgentError(Exception):
     """Base class for all agentic workflow errors."""
+
     def __init__(self, message: str, original: Exception | None = None):
         super().__init__(message)
-        self.original  = original
-        self.message   = message
+        self.original = original
+        self.message = message
 
     def __str__(self):
         if self.original:
@@ -25,12 +26,14 @@ class AgentError(Exception):
 
 # ── LLM / Model errors ───────────────────────────────────────
 
+
 class RateLimitError(AgentError):
     """
     API rate limit or quota exceeded.
     Groq: 429, groq.RateLimitError
     Anthropic: 429, anthropic.RateLimitError
     """
+
     pass
 
 
@@ -39,6 +42,7 @@ class TokenLimitError(AgentError):
     Prompt or completion exceeds model context window.
     Groq: 400 with 'context_length_exceeded' in message
     """
+
     pass
 
 
@@ -48,8 +52,13 @@ class ToolCallError(AgentError):
     and wrote prose instead.
     Groq: 400 tool_use_failed with failed_generation in response
     """
-    def __init__(self, message: str, failed_generation: str = "",
-                 original: Exception | None = None):
+
+    def __init__(
+        self,
+        message: str,
+        failed_generation: str = "",
+        original: Exception | None = None,
+    ):
         super().__init__(message, original)
         self.failed_generation = failed_generation
 
@@ -59,6 +68,7 @@ class ModelUnavailableError(AgentError):
     Model endpoint is down or overloaded.
     Groq: 503, 502
     """
+
     pass
 
 
@@ -67,6 +77,7 @@ class AuthenticationError(AgentError):
     Invalid or expired API key.
     Groq/Anthropic: 401
     """
+
     pass
 
 
@@ -75,18 +86,20 @@ class BadRequestError(AgentError):
     Malformed request — usually prompt/schema mismatch.
     Groq: 400 (non tool_use_failed variant)
     """
+
     pass
 
 
 # ── Tool / Data errors ───────────────────────────────────────
+
 
 class ToolExecutionError(AgentError):
     """
     Tool function raised an exception during execution.
     e.g. yfinance returned None, network timeout in data fetch.
     """
-    def __init__(self, tool_name: str, message: str,
-                 original: Exception | None = None):
+
+    def __init__(self, tool_name: str, message: str, original: Exception | None = None):
         super().__init__(message, original)
         self.tool_name = tool_name
 
@@ -96,8 +109,8 @@ class DataFetchError(AgentError):
     yfinance or external data source returned empty/None.
     Retries exhausted.
     """
-    def __init__(self, source: str, symbol: str,
-                 original: Exception | None = None):
+
+    def __init__(self, source: str, symbol: str, original: Exception | None = None):
         msg = f"Data fetch failed for {symbol} from {source}"
         super().__init__(msg, original)
         self.source = source
@@ -108,17 +121,19 @@ class DataParseError(AgentError):
     """
     Fetched data was malformed or missing expected fields.
     """
+
     pass
 
 
 # ── Graph / Workflow errors ───────────────────────────────────
 
+
 class NodeExecutionError(AgentError):
     """
     A LangGraph node raised an unhandled exception.
     """
-    def __init__(self, node_name: str, message: str,
-                 original: Exception | None = None):
+
+    def __init__(self, node_name: str, message: str, original: Exception | None = None):
         super().__init__(message, original)
         self.node_name = node_name
 
@@ -128,6 +143,7 @@ class StateError(AgentError):
     Required key missing from LangGraph state dict.
     e.g. state["ticker_of_company"] is None or absent.
     """
+
     def __init__(self, key: str, original: Exception | None = None):
         super().__init__(f"Required state key missing or None: '{key}'", original)
         self.key = key
@@ -137,14 +153,15 @@ class MaxRetriesExceeded(AgentError):
     """
     Retry budget exhausted across any retryable operation.
     """
-    def __init__(self, operation: str, attempts: int,
-                 original: Exception | None = None):
+
+    def __init__(
+        self, operation: str, attempts: int, original: Exception | None = None
+    ):
         super().__init__(
             f"Max retries ({attempts}) exceeded for: {operation}", original
         )
         self.operation = operation
-        self.attempts  = attempts
-
+        self.attempts = attempts
 
 
 #  2. ERROR CLASSIFIER
@@ -163,15 +180,15 @@ def classify_llm_error(exc: Exception) -> AgentError:
         - anthropic.* equivalents
         - Generic HTTP / network errors
     """
-    exc_str  = str(exc).lower()
+    exc_str = str(exc).lower()
     exc_type = type(exc).__name__
 
     # ── Rate limit ────────────────────────────────────────────
-    if any(k in exc_str for k in ["rate_limit", "rate limit", "429",
-                                   "too many requests", "quota"]):
-        return RateLimitError(
-            "API rate limit hit — back off and retry", original=exc
-        )
+    if any(
+        k in exc_str
+        for k in ["rate_limit", "rate limit", "429", "too many requests", "quota"]
+    ):
+        return RateLimitError("API rate limit hit — back off and retry", original=exc)
 
     # ── Tool call failure (Groq specific) ─────────────────────
     if "tool_use_failed" in exc_str or "failed_generation" in exc_str:
@@ -180,8 +197,7 @@ def classify_llm_error(exc: Exception) -> AgentError:
         if hasattr(exc, "response"):
             try:
                 body = exc.response.json()
-                failed_gen = (body.get("error", {})
-                                  .get("failed_generation", ""))
+                failed_gen = body.get("error", {}).get("failed_generation", "")
             except Exception:
                 pass
         return ToolCallError(
@@ -192,35 +208,42 @@ def classify_llm_error(exc: Exception) -> AgentError:
         )
 
     # ── Context / token limit ─────────────────────────────────
-    if any(k in exc_str for k in ["context_length", "token", "maximum context",
-                                   "too long", "max_tokens"]):
+    if any(
+        k in exc_str
+        for k in [
+            "context_length",
+            "token",
+            "maximum context",
+            "too long",
+            "max_tokens",
+        ]
+    ):
         return TokenLimitError(
             "Prompt exceeds model context window — reduce input size", original=exc
         )
 
     # ── Auth ─────────────────────────────────────────────────
-    if any(k in exc_str for k in ["401", "authentication", "invalid api key",
-                                   "unauthorized"]):
-        return AuthenticationError(
-            "Invalid or expired API key", original=exc
-        )
+    if any(
+        k in exc_str
+        for k in ["401", "authentication", "invalid api key", "unauthorized"]
+    ):
+        return AuthenticationError("Invalid or expired API key", original=exc)
 
     # ── Service unavailable ───────────────────────────────────
-    if any(k in exc_str for k in ["502", "503", "service unavailable",
-                                   "bad gateway", "overloaded"]):
+    if any(
+        k in exc_str
+        for k in ["502", "503", "service unavailable", "bad gateway", "overloaded"]
+    ):
         return ModelUnavailableError(
             "Model endpoint unavailable — retry later", original=exc
         )
 
     # ── Generic 400 bad request ───────────────────────────────
     if "400" in exc_str or "bad_request" in exc_str.replace(" ", "_"):
-        return BadRequestError(
-            f"Bad request to LLM API: {exc}", original=exc
-        )
+        return BadRequestError(f"Bad request to LLM API: {exc}", original=exc)
 
     # ── Fallback ──────────────────────────────────────────────
     return AgentError(f"Unclassified LLM error [{exc_type}]: {exc}", original=exc)
-
 
 
 #  3. RETRY CONFIG
@@ -230,14 +253,14 @@ RETRYABLE_ERRORS = (RateLimitError, ModelUnavailableError, ToolCallError)
 
 # How long to wait before retrying each error type
 RETRY_DELAYS: dict[type, float] = {
-    RateLimitError:       30.0,   # back off hard on rate limits
+    RateLimitError: 30.0,  # back off hard on rate limits
     ModelUnavailableError: 5.0,
-    ToolCallError:         2.0,   # usually a transient model glitch
+    ToolCallError: 2.0,  # usually a transient model glitch
 }
 
 
-
 #  4. DECORATORS
+
 
 def handle_llm_errors(
     retries: int = 3,
@@ -258,6 +281,7 @@ def handle_llm_errors(
             def _invoke(self, messages):
                 ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -269,7 +293,7 @@ def handle_llm_errors(
                     return fn(*args, **kwargs)
 
                 except AgentError:
-                    raise   # already classified, don't double-wrap
+                    raise  # already classified, don't double-wrap
 
                 except Exception as raw_exc:
                     typed = classify_llm_error(raw_exc)
@@ -307,7 +331,9 @@ def handle_llm_errors(
                     attempts=retries,
                     original=last_error,
                 )
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -325,13 +351,14 @@ def handle_tool_errors(tool_name: str) -> Callable[[F], F]:
         def get_balance_sheet(symbol: str) -> dict:
             ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             try:
                 return fn(*args, **kwargs)
             except (ToolExecutionError, DataFetchError, AgentError):
-                raise   # already typed, pass through
+                raise  # already typed, pass through
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.error(
@@ -343,7 +370,9 @@ def handle_tool_errors(tool_name: str) -> Callable[[F], F]:
                     message=f"Tool '{tool_name}' failed: {exc}",
                     original=exc,
                 )
+
         return wrapper  # type: ignore
+
     return decorator
 
 
@@ -361,6 +390,7 @@ def handle_node_errors(node_name: str) -> Callable[[F], F]:
         def run_fundamental_analyst(state: dict) -> dict:
             ...
     """
+
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
         def wrapper(state: dict, *args, **kwargs):
@@ -391,11 +421,14 @@ def handle_node_errors(node_name: str) -> Callable[[F], F]:
                     message=f"Node '{node_name}' crashed: {exc}",
                     original=exc,
                 )
+
         return wrapper  # type: ignore
+
     return decorator
 
 
 #  5. STATE VALIDATOR
+
 
 def validate_state(state: dict, *required_keys: str) -> None:
     """

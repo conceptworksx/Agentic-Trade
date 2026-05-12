@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 def _build_sector_resolver_message(data: dict) -> dict:
     """
     Format the input for the Sector Resolver stage.
-    Uses Markdown headers to help the LLM distinguish between raw ticker data, 
+    Uses Markdown headers to help the LLM distinguish between raw ticker data,
     yfinance metadata, and the target sector catalog.
     """
     content = f"""
@@ -58,9 +58,10 @@ Sector API Data (PDF Content)
 
 class SectorAnalyst(BaseAgent):
     """
-    Agent responsible for identifying a company's sector and analyzing 
+    Agent responsible for identifying a company's sector and analyzing
     the corresponding industry report.
     """
+
     prompt_path = "prompts/sector_analyst_prompt.yaml"
 
     def __init__(self):
@@ -71,10 +72,12 @@ class SectorAnalyst(BaseAgent):
             "prompts/sector_resolver_prompt.yaml"
         )
 
-        self.prompt_sector_resolver = ChatPromptTemplate.from_messages([
-            ("system", sector_resolver_prompt_yaml),
-            ("user", "{resolver_input}"),
-        ])
+        self.prompt_sector_resolver = ChatPromptTemplate.from_messages(
+            [
+                ("system", sector_resolver_prompt_yaml),
+                ("user", "{resolver_input}"),
+            ]
+        )
 
         # Step 1: Define the LLM-based sector resolver chain
         self.sector_resolver_llm_chain = (
@@ -87,19 +90,25 @@ class SectorAnalyst(BaseAgent):
 
         # Step 2: Define the Parallel Resolver stage
         # This keeps the original data (ticker, sector) while adding the 'resolved_sector' result
-        sector_resolver = RunnableParallel({
-            "ticker": RunnableLambda(lambda x: x["ticker"]),
-            "company_sector": RunnableLambda(lambda x: x["company_sector"]),
-            "resolved_sector": self.sector_resolver_llm_chain,
-        })
+        sector_resolver = RunnableParallel(
+            {
+                "ticker": RunnableLambda(lambda x: x["ticker"]),
+                "company_sector": RunnableLambda(lambda x: x["company_sector"]),
+                "resolved_sector": self.sector_resolver_llm_chain,
+            }
+        )
 
         # Step 3: Define the Data Fetching stage
         # Loads rough sector info from yfinance and the supported catalog constants
-        sector_fetcher = RunnableParallel({
-            "ticker": RunnableLambda(lambda x: x["ticker"]),
-            "company_sector": RunnableLambda(lambda x: get_company_sector(x["ticker"])),
-            "sector_catalog": RunnableLambda(lambda _: get_sector_catalog()),
-        })
+        sector_fetcher = RunnableParallel(
+            {
+                "ticker": RunnableLambda(lambda x: x["ticker"]),
+                "company_sector": RunnableLambda(
+                    lambda x: get_company_sector(x["ticker"])
+                ),
+                "sector_catalog": RunnableLambda(lambda _: get_sector_catalog()),
+            }
+        )
 
         # Step 4: Define the Final Report Generation stage
         # Fetches the actual PDF payload and runs the final sector analysis prompt
@@ -113,18 +122,24 @@ class SectorAnalyst(BaseAgent):
 
         # Main Pipeline: Fetch -> Resolve -> Analyze
         # If yfinance metadata fetch fails, we short-circuit the chain and return an error.
-        
+
         self.chain = sector_fetcher | RunnableBranch(
             (
                 lambda x: x["company_sector"]["status"] == "failed",
-                RunnableLambda(lambda x: f"Sector analysis aborted: Ticker '{x['ticker']}' not found or metadata unavailable. Error: {x['company_sector'].get('error', 'Unknown error')}")
+                RunnableLambda(
+                    lambda x: f"Sector analysis aborted: Ticker '{x['ticker']}' not found or metadata unavailable. Error: {x['company_sector'].get('error', 'Unknown error')}"
+                ),
             ),
-            sector_resolver | report_generator
+            sector_resolver | report_generator,
         )
 
-    def run(self, ticker: str) -> str:
+    def run(self, state) -> str:
         """Execute the full sector analysis pipeline for a given ticker."""
-        logger.info(f"Running sector analyst pipeline | ticker={ticker}")
-        return self.chain.invoke({
-            "ticker": ticker,
-        })
+        logger.info(
+            f"Running sector analyst pipeline | ticker={state['ticker_of_company']}"
+        )
+        return self.chain.invoke(
+            {
+                "ticker": state["ticker_of_company"],
+            }
+        )

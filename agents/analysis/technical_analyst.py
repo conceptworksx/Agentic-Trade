@@ -1,12 +1,15 @@
 import json
-from langchain_core.messages import HumanMessage 
-from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableBranch
-from langchain_core.output_parsers import StrOutputParser
-from agents.base_agent import BaseAgent
-from tools.technical_tools import (
-    fetch_df, compute_moving_averages, compute_rsi, compute_macd, compute_bollinger,
-    compute_atr, compute_vwma, compute_mfi, compute_volume, compute_price_levels
+
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import (
+    RunnableLambda,
+    RunnableBranch,
 )
+from langchain_core.output_parsers import StrOutputParser
+
+from agents.base_agent import BaseAgent
+
+from tools.technical_tools import process_technical_data
 
 
 def _build_messages(data: dict) -> dict:
@@ -45,82 +48,31 @@ Support and Resistance Levels:
 
 
 class TechnicalAnalyst(BaseAgent):
+
     prompt_path = "prompts/technical_analyst_prompt.yaml"
 
     def __init__(self):
+
         super().__init__()
 
-        technical_fetcher = RunnableLambda(
-            lambda x: {
-                "ticker": x["ticker"],
-                "fetch": fetch_df(x["ticker"])
-            }
-        )
-
-        prep = RunnableLambda(
-            lambda x: {
-                "ticker": x["ticker"],
-                "df": (
-                    x["fetch"]["data"]
-                    if x.get("fetch", {}).get("status") == "success"
-                    else None
-                ),
-                "status": x.get("fetch", {}).get("status"),
-                "error": x.get("fetch", {}).get("error"),
-            }
-        )
-
-
-        process_technical_data = RunnableParallel(
-            {
-                "ticker": RunnableLambda(lambda x: x["ticker"]),
-
-                "price_levels": RunnableLambda(lambda x: compute_price_levels(x["df"])),
-
-                "moving_averages": RunnableLambda(lambda x: compute_moving_averages(x["df"])),
-
-                "rsi": RunnableLambda(lambda x: compute_rsi(x["df"])),
-
-                "macd": RunnableLambda(lambda x: compute_macd(x["df"])),
-
-                "bollinger": RunnableLambda(lambda x: compute_bollinger(x["df"])),
-
-                "atr": RunnableLambda(lambda x: compute_atr(x["df"])),
-
-                "vwma": RunnableLambda(lambda x: compute_vwma(x["df"])),
-
-                "mfi": RunnableLambda(lambda x: compute_mfi(x["df"])),
-
-                "volume": RunnableLambda(lambda x: compute_volume(x["df"])),
-            }
-        )
-
         success_chain = (
-            process_technical_data
-            | RunnableLambda(_build_messages)
-            | self.prompt
-            | self.llm
-            | StrOutputParser()
+            RunnableLambda(_build_messages) | self.prompt | self.llm | StrOutputParser()
         )
 
         error_chain = RunnableLambda(
-            lambda x: f"Failed to fetch technical data: {x.get('error', 'Unknown error')}"
+            lambda x: f"Failed to fetch technical data for {x['ticker']}: {x['error']}"
         )
 
-        branching_chain = RunnableBranch(
+        branch = RunnableBranch(
             (
-                lambda x: x.get("status") == "success",
+                lambda x: x["status"] == "success",
                 success_chain,
             ),
             error_chain,
         )
 
-        self.chain = (
-            technical_fetcher
-            | prep
-            | branching_chain
-        )
+        self.chain = RunnableLambda(process_technical_data) | branch
 
+    def run(self, state):
 
-    def run(self, ticker: str):
-        return self.chain.invoke({"ticker": ticker})
+        return self.chain.invoke({"ticker": state["ticker_of_company"]})

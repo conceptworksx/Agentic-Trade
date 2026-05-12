@@ -1,12 +1,19 @@
 import json
+
 from langchain_core.messages import HumanMessage
-from langchain_core.runnables import RunnableParallel, RunnableLambda
+from langchain_core.runnables import (
+    RunnableLambda,
+    RunnableBranch,
+)
 from langchain_core.output_parsers import StrOutputParser
+
 from agents.base_agent import BaseAgent
-from tools.market_tools import (fetch_df, extract_metrics, TICKERS)
+
+from tools.market_tools import process_market_data
 
 
 def _build_messages(data: dict) -> dict:
+
     content = f"""
 Analyze the Indian and Global market metrics:
 
@@ -26,40 +33,35 @@ SENSEX:
 {json.dumps(data.get('BSESN', {}), indent=2)}
 """
 
-    return {
-        "messages": [
-            HumanMessage(content=content.strip())
-        ]
-    }
+    return {"messages": [HumanMessage(content=content.strip())]}
+
 
 class MarketAnalyst(BaseAgent):
+
     prompt_path = "prompts/market_analyst_prompt.yaml"
 
     def __init__(self):
+
         super().__init__()
 
-
-        market_fetcher = RunnableParallel({
-            name : RunnableLambda(lambda _, t=ticker: fetch_df(t))
-            for name, ticker in TICKERS.items()
-        })
-        
-        process_market_data = RunnableLambda(
-                lambda x: {
-                    name: extract_metrics(name, v["status"], v["data"])
-                    for name, v in x.items()
-                }
+        success_chain = (
+            RunnableLambda(_build_messages) | self.prompt | self.llm | StrOutputParser()
         )
 
-        self.chain=(
-            market_fetcher
-            | process_market_data
-            | RunnableLambda(_build_messages)
-            | self.prompt
-            | self.llm
-            | StrOutputParser()
+        error_chain = RunnableLambda(
+            lambda x: f"Failed to fetch market data:\n{x['error']}"
         )
 
+        branch = RunnableBranch(
+            (
+                lambda x: x["status"] == "success",
+                success_chain,
+            ),
+            error_chain,
+        )
+
+        self.chain = RunnableLambda(process_market_data) | branch
 
     def run(self) -> str:
+
         return self.chain.invoke({})

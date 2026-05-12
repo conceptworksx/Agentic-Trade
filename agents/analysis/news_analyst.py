@@ -26,7 +26,6 @@ GLOBAL MARKET NEWS:
     return {"messages": [HumanMessage(content=content)]}
 
 
-
 class NewsAnalyst(BaseAgent):
 
     prompt_path = "prompts/news_analyst_prompt.yaml"
@@ -34,18 +33,14 @@ class NewsAnalyst(BaseAgent):
     def __init__(self):
         super().__init__()
 
-        news_fetcher = RunnableParallel({
-            "ticker": RunnableLambda(lambda x: x["ticker"]),
-            "company_news": RunnableLambda(
-                lambda x: get_company_news(x["ticker"])
-            ),
-            "indian_news": RunnableLambda(
-                lambda _: get_indian_market_news()
-            ),
-            "global_news": RunnableLambda(
-                lambda _: get_global_market_news()
-            ),
-        })
+        news_fetcher = RunnableParallel(
+            {
+                "ticker": RunnableLambda(lambda x: x["ticker"]),
+                "company_news": RunnableLambda(lambda x: get_company_news(x["ticker"])),
+                "indian_news": RunnableLambda(lambda _: get_indian_market_news()),
+                "global_news": RunnableLambda(lambda _: get_global_market_news()),
+            }
+        )
 
         self.chain = (
             news_fetcher
@@ -55,7 +50,9 @@ class NewsAnalyst(BaseAgent):
             | StrOutputParser()
         )
 
-    def run(self, ticker: str) -> str:
-        return self.chain.invoke({
-            "ticker": ticker,
-        })
+    def run(self, state) -> str:
+        return self.chain.invoke(
+            {
+                "ticker": state["ticker_of_company"],
+            }
+        )

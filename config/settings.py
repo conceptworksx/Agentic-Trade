@@ -26,4 +26,5 @@ def get_llm():
         temperature=0.3,
     )
 
+
 model = get_llm()

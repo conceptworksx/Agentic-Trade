@@ -1,27 +1,51 @@
 import json
 import warnings
-import pandas as pd 
-import yfinance as yf 
+import pandas as pd
+import yfinance as yf
 import ta
 from typing import Any
 from tools.utils.technical_tool_helper import (
     _compute_mfi_condition_signal,
     _compute_rsi_condition,
-    _compute_trend_alignment
-
-)
-from core.error import (
-    handle_tool_errors,
-    DataFetchError,
-    DataParseError,
-    MaxRetriesExceeded,
-    AgentError,
+    _compute_trend_alignment,
 )
 from tools.utils.retry_utils import with_retry
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 
 warnings.filterwarnings("ignore")
+
+
+def process_technical_data(x):
+
+    ticker = x["ticker"]
+
+    fetch_result = fetch_df(ticker)
+
+    if fetch_result["status"] != "success":
+
+        return {
+            "ticker": ticker,
+            "status": "failed",
+            "error": fetch_result["error"],
+        }
+
+    df = fetch_result["data"]
+
+    return {
+        "ticker": ticker,
+        "status": "success",
+        "price_levels": compute_price_levels(df),
+        "moving_averages": compute_moving_averages(df),
+        "rsi": compute_rsi(df),
+        "macd": compute_macd(df),
+        "bollinger": compute_bollinger(df),
+        "atr": compute_atr(df),
+        "vwma": compute_vwma(df),
+        "mfi": compute_mfi(df),
+        "volume": compute_volume(df),
+    }
 
 
 @with_retry(retries=3, delay=2.0, backoff=2.0)
@@ -51,12 +75,22 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> dict[str,
         result["error"] = f"download_failed: {exc}"
         return result
 
+    # Initial empty check
     if df is None or df.empty:
         logger.warning(f"Empty DataFrame | ticker={ticker}")
         result["error"] = "empty_dataframe"
         return result
 
     try:
+        # Remove rows with NaN values
+        df = df.dropna(how="any")
+
+        # Check again after cleaning
+        if df.empty:
+            logger.warning(f"DataFrame empty after dropna | ticker={ticker}")
+            result["error"] = "empty_after_dropna"
+            return result
+
         df.index = pd.to_datetime(df.index).tz_localize(None)
         df.sort_index(inplace=True)
 
@@ -66,7 +100,7 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> dict[str,
     except Exception as exc:
         logger.exception(f"Normalization failed | ticker={ticker} | {exc}")
         result["error"] = f"parse_error: {exc}"
-        result["data"] = df 
+        result["data"] = df
         result["status"] = "partial"
         return result
 
@@ -133,8 +167,12 @@ def compute_moving_averages(df: pd.DataFrame) -> dict[str, Any]:
         ma50 = result["ma50"]
         ma200 = result["ma200"]
 
-        result["golden_cross"] = bool(ma50 is not None and ma200 is not None and ma50 > ma200)
-        result["death_cross"] = bool(ma50 is not None and ma200 is not None and ma50 < ma200)
+        result["golden_cross"] = bool(
+            ma50 is not None and ma200 is not None and ma50 > ma200
+        )
+        result["death_cross"] = bool(
+            ma50 is not None and ma200 is not None and ma50 < ma200
+        )
 
         result["trend_alignment"] = (
             _compute_trend_alignment(above_count) if valid_mas > 0 else "UNKNOWN"
@@ -203,25 +241,33 @@ def compute_rsi(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
         else:
             try:
                 price_ll = close.iloc[-1] == close.rolling(lkbk).min().iloc[-1]
-                rsi_hl = rsi_series.rolling(lkbk).min().iloc[-1] > rsi_series.shift(lkbk).iloc[-1]
+                rsi_hl = (
+                    rsi_series.rolling(lkbk).min().iloc[-1]
+                    > rsi_series.shift(lkbk).iloc[-1]
+                )
                 bull_div = bool(price_ll and rsi_hl)
 
                 price_hh = close.iloc[-1] == close.rolling(lkbk).max().iloc[-1]
-                rsi_lh = rsi_series.rolling(lkbk).max().iloc[-1] < rsi_series.shift(lkbk).iloc[-1]
+                rsi_lh = (
+                    rsi_series.rolling(lkbk).max().iloc[-1]
+                    < rsi_series.shift(lkbk).iloc[-1]
+                )
                 bear_div = bool(price_hh and rsi_lh)
 
             except Exception as div_err:
                 logger.warning(f"Divergence calc failed: {div_err}")
                 bull_div, bear_div = False, False
 
-        result.update({
-            "value": round(cur, 2),
-            "condition": condition,
-            "trending_up": cur > prv,
-            "bull_divergence": bull_div,
-            "bear_divergence": bear_div,
-            "status": "success",
-        })
+        result.update(
+            {
+                "value": round(cur, 2),
+                "condition": condition,
+                "trending_up": cur > prv,
+                "bull_divergence": bull_div,
+                "bear_divergence": bear_div,
+                "status": "success",
+            }
+        )
 
         if condition in ("OVERBOUGHT", "OVERSOLD"):
             logger.warning(f"RSI extreme zone | value={cur:.2f} condition={condition}")
@@ -294,17 +340,19 @@ def compute_macd(df: pd.DataFrame) -> dict[str, Any]:
         bullish_cross = prv_m < prv_s and cur_m >= cur_s
         bearish_cross = prv_m > prv_s and cur_m <= cur_s
 
-        result.update({
-            "macd": round(cur_m, 4),
-            "signal": round(cur_s, 4),
-            "histogram": round(cur_h, 4),
-            "above_signal": cur_m > cur_s,
-            "bullish_cross": bool(bullish_cross),
-            "bearish_cross": bool(bearish_cross),
-            "histogram_expanding": abs(cur_h) > abs(prv_h),
-            "bias": "BULLISH" if cur_m > cur_s else "BEARISH",
-            "status": "success",
-        })
+        result.update(
+            {
+                "macd": round(cur_m, 4),
+                "signal": round(cur_s, 4),
+                "histogram": round(cur_h, 4),
+                "above_signal": cur_m > cur_s,
+                "bullish_cross": bool(bullish_cross),
+                "bearish_cross": bool(bearish_cross),
+                "histogram_expanding": abs(cur_h) > abs(prv_h),
+                "bias": "BULLISH" if cur_m > cur_s else "BEARISH",
+                "status": "success",
+            }
+        )
 
         if bullish_cross:
             logger.info("MACD bullish crossover detected")
@@ -312,8 +360,7 @@ def compute_macd(df: pd.DataFrame) -> dict[str, Any]:
             logger.info("MACD bearish crossover detected")
 
         logger.debug(
-            f"MACD computed | macd={cur_m:.4f} signal={cur_s:.4f} "
-            f"hist={cur_h:.4f}"
+            f"MACD computed | macd={cur_m:.4f} signal={cur_s:.4f} " f"hist={cur_h:.4f}"
         )
 
         return result
@@ -380,15 +427,21 @@ def compute_bollinger(df: pd.DataFrame) -> dict[str, Any]:
         lb = float(lb_series.iloc[-1])
 
         # --- safe division guards ---
-        band_width = (ub - lb)
+        band_width = ub - lb
         bw = (band_width / mid * 100) if mid else 0
 
         pct_b = (price - lb) / band_width if band_width != 0 else 0.5
 
         bw_series = (ub_series - lb_series) / mid_series * 100
 
-        bw_ma10 = float(bw_series.rolling(10).mean().iloc[-1]) if len(bw_series) >= 10 else bw
-        bw_q20 = float(bw_series.rolling(20).quantile(0.20).iloc[-1]) if len(bw_series) >= 20 else bw
+        bw_ma10 = (
+            float(bw_series.rolling(10).mean().iloc[-1]) if len(bw_series) >= 10 else bw
+        )
+        bw_q20 = (
+            float(bw_series.rolling(20).quantile(0.20).iloc[-1])
+            if len(bw_series) >= 20
+            else bw
+        )
 
         # --- volume safety ---
         if "Volume" in df and len(df["Volume"]) >= 20:
@@ -403,20 +456,26 @@ def compute_bollinger(df: pd.DataFrame) -> dict[str, Any]:
 
         bw_trend = "EXPANDING" if bw > bw_ma10 else "CONTRACTING"
 
-        result.update({
-            "upper": round(ub, 2),
-            "mid": round(mid, 2),
-            "lower": round(lb, 2),
-            "bandwidth_pct": round(bw, 2),
-            "percent_b": round(pct_b, 3),
-            "bandwidth_trend": bw_trend,
-            "squeeze_active": bool(squeeze_active),
-            "breakout_up": bool(breakout_up),
-            "breakout_down": bool(breakout_down),
-            "upside_to_upper_pct": round((ub - price) / price * 100, 2) if price else None,
-            "downside_to_lower_pct": round((price - lb) / price * 100, 2) if price else None,
-            "status": "success",
-        })
+        result.update(
+            {
+                "upper": round(ub, 2),
+                "mid": round(mid, 2),
+                "lower": round(lb, 2),
+                "bandwidth_pct": round(bw, 2),
+                "percent_b": round(pct_b, 3),
+                "bandwidth_trend": bw_trend,
+                "squeeze_active": bool(squeeze_active),
+                "breakout_up": bool(breakout_up),
+                "breakout_down": bool(breakout_down),
+                "upside_to_upper_pct": (
+                    round((ub - price) / price * 100, 2) if price else None
+                ),
+                "downside_to_lower_pct": (
+                    round((price - lb) / price * 100, 2) if price else None
+                ),
+                "status": "success",
+            }
+        )
 
         # --- logs ---
         logger.debug(
@@ -495,16 +554,18 @@ def compute_atr(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
         else:
             volatility = "LOW"
 
-        result.update({
-            "value": round(atr_val, 2),
-            "atr_pct": round(atr_pct, 2),
-            "volatility": volatility,
-            "daily_move_range": {
-                "low": round(price - atr_val, 2),
-                "high": round(price + atr_val, 2),
-            },
-            "status": "success",
-        })
+        result.update(
+            {
+                "value": round(atr_val, 2),
+                "atr_pct": round(atr_pct, 2),
+                "volatility": volatility,
+                "daily_move_range": {
+                    "low": round(price - atr_val, 2),
+                    "high": round(price + atr_val, 2),
+                },
+                "status": "success",
+            }
+        )
 
         logger.debug(
             f"ATR computed | value={atr_val:.2f} atr_pct={atr_pct:.2f}% "
@@ -566,12 +627,14 @@ def compute_vwma(df: pd.DataFrame, window: int = 20) -> dict[str, Any]:
 
         pos = "ABOVE" if price > vwma_val else "BELOW"
 
-        result.update({
-            "value": round(vwma_val, 2),
-            "price_vs_vwma": pos,
-            "signal": "BULLISH" if pos == "ABOVE" else "BEARISH",
-            "status": "success",
-        })
+        result.update(
+            {
+                "value": round(vwma_val, 2),
+                "price_vs_vwma": pos,
+                "signal": "BULLISH" if pos == "ABOVE" else "BEARISH",
+                "status": "success",
+            }
+        )
 
         logger.debug(
             f"VWMA computed | vwma={vwma_val:.2f} price={price:.2f} position={pos}"
@@ -584,7 +647,7 @@ def compute_vwma(df: pd.DataFrame, window: int = 20) -> dict[str, Any]:
         result["error"] = str(exc)
         result["status"] = "failed"
         return result
-    
+
 
 def compute_mfi(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
     """
@@ -631,12 +694,14 @@ def compute_mfi(df: pd.DataFrame, window: int = 14) -> dict[str, Any]:
 
         condition, signal = _compute_mfi_condition_signal(mfi_val)
 
-        result.update({
-            "value": round(mfi_val, 2),
-            "condition": condition,
-            "signal": signal,
-            "status": "success",
-        })
+        result.update(
+            {
+                "value": round(mfi_val, 2),
+                "condition": condition,
+                "signal": signal,
+                "status": "success",
+            }
+        )
 
         if condition in ("OVERBOUGHT", "OVERSOLD"):
             logger.warning(
@@ -699,13 +764,15 @@ def compute_volume(df: pd.DataFrame) -> dict[str, Any]:
 
         surge = bool(avg20 and avg5 > avg20 * 1.5)
 
-        result.update({
-            "latest": latest,
-            "avg_20d": round(avg20, 2),
-            "ratio_5d_20d": round(ratio, 2) if ratio is not None else None,
-            "surge": surge,
-            "status": "success",
-        })
+        result.update(
+            {
+                "latest": latest,
+                "avg_20d": round(avg20, 2),
+                "ratio_5d_20d": round(ratio, 2) if ratio is not None else None,
+                "surge": surge,
+                "status": "success",
+            }
+        )
 
         logger.debug(
             f"Volume computed | latest={latest} avg20={avg20:.2f} "
@@ -722,7 +789,7 @@ def compute_volume(df: pd.DataFrame) -> dict[str, Any]:
         result["error"] = str(exc)
         result["status"] = "failed"
         return result
-    
+
 
 def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
     """
@@ -775,15 +842,21 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
         else:
             rs_20d = None
 
-        result.update({
-            "current": round(price, 2),
-            "high_52w": round(h52, 2),
-            "low_52w": round(l52, 2),
-            "pct_from_52w_high": round(pct_from_high, 2) if pct_from_high is not None else None,
-            "pct_from_52w_low": round(pct_from_low, 2) if pct_from_low is not None else None,
-            "rs_20d_pct": round(rs_20d, 2) if rs_20d is not None else None,
-            "status": "success",
-        })
+        result.update(
+            {
+                "current": round(price, 2),
+                "high_52w": round(h52, 2),
+                "low_52w": round(l52, 2),
+                "pct_from_52w_high": (
+                    round(pct_from_high, 2) if pct_from_high is not None else None
+                ),
+                "pct_from_52w_low": (
+                    round(pct_from_low, 2) if pct_from_low is not None else None
+                ),
+                "rs_20d_pct": round(rs_20d, 2) if rs_20d is not None else None,
+                "status": "success",
+            }
+        )
 
         logger.debug(
             f"Price levels computed | current={price:.2f} "
@@ -791,9 +864,7 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
         )
 
         if pct_from_high is not None and pct_from_high < -20:
-            logger.warning(
-                f"Significant drawdown | {pct_from_high:.2f}% from 52W high"
-            )
+            logger.warning(f"Significant drawdown | {pct_from_high:.2f}% from 52W high")
 
         return result
 
@@ -802,24 +873,26 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
         result["error"] = str(exc)
         result["status"] = "failed"
         return result
-    
+
 
 if __name__ == "__main__":
 
     print("Fetching technical snapshot \n")
-    ticker="RELIANCE.NS"
-    df=fetch_df(ticker)
-    snapshot= {
-        "ticker":          ticker,
-        "price_levels":    compute_price_levels(df['data']),
-        "moving_averages": compute_moving_averages(df['data']),
-        "rsi":             compute_rsi(df['data']),
-        "macd":            compute_macd(df['data']),
-        "bollinger":       compute_bollinger(df['data']),
-        "atr":             compute_atr(df['data']),
-        "vwma":            compute_vwma(df['data']),
-        "mfi":             compute_mfi(df['data']),
-        "volume":          compute_volume(df['data']),
+    ticker = "HINDUNILVR.NS"
+    df = fetch_df(ticker)
+    print(df["data"])
+    print(f"Data fetch status: {df['status']}")
+    snapshot = {
+        "ticker": ticker,
+        "price_levels": compute_price_levels(df["data"]),
+        "moving_averages": compute_moving_averages(df["data"]),
+        "rsi": compute_rsi(df["data"]),
+        "macd": compute_macd(df["data"]),
+        "bollinger": compute_bollinger(df["data"]),
+        "atr": compute_atr(df["data"]),
+        "vwma": compute_vwma(df["data"]),
+        "mfi": compute_mfi(df["data"]),
+        "volume": compute_volume(df["data"]),
     }
     output = json.dumps(snapshot, indent=2)
     print(output)
