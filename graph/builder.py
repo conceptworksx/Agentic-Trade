@@ -32,7 +32,7 @@ def build_graph():
 
     work_flow.add_edge("aggregator", END)
 
-    return work_flow.compile(debug=False)
+    return work_flow.compile(debug=True)
 
 
 try:

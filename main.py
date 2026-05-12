@@ -69,4 +69,4 @@ def run_app(ticker: str):
 
 
 if __name__ == "__main__":
-    run_app("PFC.NS")
+    run_app("HINDUNILVR.NS")

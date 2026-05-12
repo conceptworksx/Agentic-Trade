@@ -75,12 +75,22 @@ def fetch_df(ticker: str, period: str = "1y", interval: str = "1d") -> dict[str,
         result["error"] = f"download_failed: {exc}"
         return result
 
+    # Initial empty check
     if df is None or df.empty:
         logger.warning(f"Empty DataFrame | ticker={ticker}")
         result["error"] = "empty_dataframe"
         return result
 
     try:
+        # Remove rows with NaN values
+        df = df.dropna(how="any")
+
+        # Check again after cleaning
+        if df.empty:
+            logger.warning(f"DataFrame empty after dropna | ticker={ticker}")
+            result["error"] = "empty_after_dropna"
+            return result
+
         df.index = pd.to_datetime(df.index).tz_localize(None)
         df.sort_index(inplace=True)
 
@@ -868,8 +878,10 @@ def compute_price_levels(df: pd.DataFrame) -> dict[str, Any]:
 if __name__ == "__main__":
 
     print("Fetching technical snapshot \n")
-    ticker = "RELIANCE.NS"
+    ticker = "HINDUNILVR.NS"
     df = fetch_df(ticker)
+    print(df["data"])
+    print(f"Data fetch status: {df['status']}")
     snapshot = {
         "ticker": ticker,
         "price_levels": compute_price_levels(df["data"]),

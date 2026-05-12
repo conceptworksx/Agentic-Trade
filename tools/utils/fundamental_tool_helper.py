@@ -6,6 +6,7 @@ from typing import Any
 import logging
 from core.error import DataFetchError, DataParseError
 from core.logging import get_logger
+
 logger = get_logger(__name__)
 warnings.filterwarnings("ignore")
 
@@ -69,6 +70,7 @@ def _cagr(d: dict) -> float | None:
 
     return round(((end / start) ** (1 / n) - 1) * 100, 2)
 
+
 def _ratio_dict(num_d, den_d):
     keys = set(num_d.keys()) | set(den_d.keys())
     return {d: _safe_divide(num_d.get(d), den_d.get(d)) for d in keys}
@@ -82,12 +84,10 @@ def _margin(num_d, den_d):
     return result
 
 
-def _safe_get(info:dict, key: str) -> float | None:
-        v = info.get(key)
-        if v is None:
-            return None
-        if isinstance(v, float) and np.isnan(v):
-            return None
-        return v
-
-
+def _safe_get(info: dict, key: str) -> float | None:
+    v = info.get(key)
+    if v is None:
+        return None
+    if isinstance(v, float) and np.isnan(v):
+        return None
+    return v

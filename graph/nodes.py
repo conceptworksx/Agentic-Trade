@@ -6,6 +6,7 @@ from agents.analysis.technical_analyst import TechnicalAnalyst
 from agents.analysis.fundamental_analyst import FundamentalAnalyst
 from core.error import handle_node_errors, validate_state
 from core.logging import get_logger
+import time
 
 logger = get_logger(__name__)
 
@@ -25,6 +26,9 @@ def run_market_analyst(state: AgentState) -> dict:
 
 @handle_node_errors("fundamental_analyst")
 def run_fundamental_analyst(state: AgentState) -> dict:
+    time.sleep(
+        1.5
+    )  # intentional delay to reduce likelihood of yfinance.info 401 errors
     result = fundamental_analyst.run(state)
     return {"fundamental_analyst_report": result}
 
@@ -37,13 +41,13 @@ def run_technical_analyst(state: AgentState) -> dict:
 
 @handle_node_errors("news_analyst")
 def run_news_analyst(state: AgentState) -> dict:
-    result = news_analyst.run(ticker=state["ticker_of_company"])
+    result = news_analyst.run(state)
     return {"news_analyst_report": result}
 
 
 @handle_node_errors("sector_analyst")
 def run_sector_analyst(state: AgentState) -> dict:
-    result = sector_analyst.run(ticker=state["ticker_of_company"])
+    result = sector_analyst.run(state)
     return {"sector_analyst_report": result}
 
 
@@ -61,9 +65,7 @@ def run_aggregator(state: AgentState) -> dict:
 
     final_report = {
         "input": {
-            "ticker": state.get("ticker"),
-            "company": state.get("company"),
-            "query": state.get("query"),
+            "ticker": state.get("ticker_of_company"),
         },
         "analysis": {
             "market": state.get("market_analyst_report"),
